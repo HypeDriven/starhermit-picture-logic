@@ -275,6 +275,7 @@ export class UI {
       }
     }
     this.cursor = { r: 0, c: 0 };
+    this._lastCenters = null; // fresh buttons need fresh overlay positions
     this._paintBound = this._paintBound || this._bindPainting(grid);
     this.maxRowClues = Math.max(...rowClues.map(x => x.length), 1);
     this.maxColClues = Math.max(...colClues.map(x => x.length), 1);
@@ -348,30 +349,55 @@ export class UI {
     this.onAction({ type: this._paint.action, r: cell.r, c: cell.c, stroke: key });
   }
 
-  // Position the DOM overlay exactly over the projected 3D board.
-  layoutBoard(rect) {
-    if (!rect || this.flat) return;
-    const frame = $('board-frame');
-    const clueFont = Math.min(17, Math.max(10, Math.min(rect.cellW, rect.cellH) * 0.42));
-    const lineH = clueFont * 1.22;
-    const ch = this.maxColClues * lineH + 6;
-    const cw = this.maxRowClues * clueFont * 0.75 + 12;
-    frame.style.left = `${rect.left - cw}px`;
-    frame.style.top = `${rect.top - ch}px`;
-    frame.style.width = `${rect.width + cw}px`;
-    frame.style.height = `${rect.height + ch}px`;
-    frame.style.gridTemplateColumns = `${cw}px 1fr`;
-    frame.style.gridTemplateRows = `${ch}px 1fr`;
-    frame.style.fontSize = `${clueFont}px`;
-    const last = this._lastRect || {};
-    if (Math.abs((last.w || 0) - rect.width) > 1) {
-      this._lastRect = { w: rect.width };
+  // Position the DOM overlay exactly over the projected 3D board. Perspective
+  // makes the projected cell grid a trapezoid, so each semantic button is
+  // placed on its own projected quad — no uniform grid can line up with it.
+  layoutBoard(proj) {
+    if (!proj || this.flat) return;
+    if (this.cellButtons.length !== proj.rows * proj.cols) return;
+    // Camera at rest → identical projection → skip the DOM writes.
+    if (this._lastCenters && this._lastCenters.length === proj.centers.length) {
+      let same = true;
+      for (let i = 0; i < proj.centers.length; i++) {
+        if (Math.abs(proj.centers[i] - this._lastCenters[i]) > 0.05) { same = false; break; }
+      }
+      if (same) return;
     }
+    this._lastCenters = proj.centers;
+    const lay = overlayLayout(proj.rows, proj.cols, proj.centers);
+    for (let i = 0; i < this.cellButtons.length; i++) {
+      const b = this.cellButtons[i], q = lay.cells[i];
+      b.style.left = `${q.left}px`;
+      b.style.top = `${q.top}px`;
+      b.style.width = `${q.width}px`;
+      b.style.height = `${q.height}px`;
+    }
+    const colLines = $('col-clues').children;
+    for (let c = 0; c < lay.colClues.length && c < colLines.length; c++) {
+      const q = lay.colClues[c];
+      colLines[c].style.left = `${q.left}px`;
+      colLines[c].style.top = `${q.top}px`;
+      colLines[c].style.width = `${q.width}px`;
+      colLines[c].style.height = `${q.height}px`;
+    }
+    const rowLines = $('row-clues').children;
+    for (let r = 0; r < lay.rowClues.length && r < rowLines.length; r++) {
+      const q = lay.rowClues[r];
+      rowLines[r].style.left = `${q.left}px`;
+      rowLines[r].style.top = `${q.top}px`;
+      rowLines[r].style.width = `${q.width}px`;
+      rowLines[r].style.height = `${q.height}px`;
+    }
+    const clueFont = Math.min(17, Math.max(10, Math.min(lay.cellW, lay.cellH) * 0.42));
+    $('board-frame').style.fontSize = `${clueFont}px`;
   }
 
   // Flat fallback sizing when WebGL is unavailable.
   layoutFlat(state) {
     if (!this.flat) return;
+    // Strip any per-cell 3D overlay positions so flow layout takes over.
+    for (const b of this.cellButtons) b.style.cssText = '';
+    for (const line of document.querySelectorAll('.clue-line')) line.style.cssText = '';
     const pf = $('playfield');
     const availW = pf.clientWidth - 24, availH = pf.clientHeight - 24;
     const clueW = this.maxRowClues * 1.1 + 1;
@@ -572,6 +598,43 @@ export class UI {
 
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// Overlay geometry from live-projected cell centers (canvas-relative CSS px).
+// Perspective makes the projected board a trapezoid, so every cell gets its
+// own quad (edges shared with its neighbors) instead of a slot in a uniform
+// grid. Pure and DOM-free so the coordinate mapping is unit-testable.
+export function overlayLayout(rows, cols, centers) {
+  const idx = (r, c) => (r * cols + c) * 2;
+  const quad = (r, c) => {
+    const i = idx(r, c), cx = centers[i], cy = centers[i + 1];
+    const x0 = c > 0 ? centers[i - 2] : 2 * cx - centers[i + 2];
+    const x1 = c < cols - 1 ? centers[i + 2] : 2 * cx - centers[i - 2];
+    const y0 = r > 0 ? centers[i - cols * 2 + 1] : 2 * cy - centers[i + cols * 2 + 1];
+    const y1 = r < rows - 1 ? centers[i + cols * 2 + 1] : 2 * cy - centers[i - cols * 2 + 1];
+    return { left: (cx + x0) / 2, top: (cy + y0) / 2, width: (x1 - x0) / 2, height: (y1 - y0) / 2 };
+  };
+  const cells = [];
+  let cellW = 0, cellH = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const q = quad(r, c);
+      cells.push(q);
+      cellW += q.width; cellH += q.height;
+    }
+  }
+  cellW /= rows * cols; cellH /= rows * cols;
+  // Clue lines hug the projected board edge of their own row/column.
+  const colClues = [], rowClues = [];
+  for (let c = 0; c < cols; c++) {
+    const q = cells[c];
+    colClues.push({ left: q.left, top: 0, width: q.width, height: Math.max(0, q.top - 6) });
+  }
+  for (let r = 0; r < rows; r++) {
+    const q = cells[r * cols];
+    rowClues.push({ left: 0, top: q.top, width: Math.max(0, q.left - 6), height: q.height });
+  }
+  return { cells, colClues, rowClues, cellW, cellH };
 }
 
 export function formatMs(ms) {

@@ -604,23 +604,25 @@ export class BoardRenderer {
     };
   }
 
-  // Board bounds in CSS px (corners of the outer cell grid).
-  boardScreenRect() {
+  // Project every cell center to CSS px relative to the canvas. The DOM layer
+  // positions its semantic controls per cell: perspective makes the projected
+  // board a trapezoid, so a single uniform rect can never line up with it.
+  projectCells() {
     if (!this.cells) return null;
-    const tl = this.projectCell(0, 0);
-    const br = this.projectCell(this.rows - 1, this.cols - 1);
-    const tr = this.projectCell(0, this.cols - 1);
-    const bl = this.projectCell(this.rows - 1, 0);
-    const cellW = Math.abs(tr.x - tl.x) / Math.max(1, this.cols - 1 || 1);
-    const cellH = Math.abs(bl.y - tl.y) / Math.max(1, this.rows - 1 || 1);
-    const left = Math.min(tl.x, bl.x) - cellW / 2;
-    const top = Math.min(tl.y, tr.y) - cellH / 2;
-    return {
-      left, top,
-      width: Math.abs(tr.x - tl.x) + cellW,
-      height: Math.abs(bl.y - tl.y) + cellH,
-      cellW, cellH,
-    };
+    const rect = this.canvas.getBoundingClientRect();
+    const centers = new Float32Array(this.rows * this.cols * 2);
+    const p = this._tmpV;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.cellPos(r, c, p);
+        p.y = 0.2;
+        p.project(this.camera);
+        const i = (r * this.cols + c) * 2;
+        centers[i] = (p.x * 0.5 + 0.5) * rect.width;
+        centers[i + 1] = (-p.y * 0.5 + 0.5) * rect.height;
+      }
+    }
+    return { rows: this.rows, cols: this.cols, centers };
   }
 
   resize(width, height) {

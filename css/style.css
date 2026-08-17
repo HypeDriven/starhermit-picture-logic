@@ -282,6 +282,25 @@ button.card:hover { border-color: var(--accent); }
   display: grid;
   pointer-events: auto;
 }
+
+/* 3D mode: the overlay tracks the live projection per cell (perspective makes
+   the board a trapezoid, so a uniform grid can never line up with it). The
+   frame covers the playfield; buttons and clue lines are placed by JS. */
+#playfield:not(.flat) #board-frame {
+  inset: 0;
+  width: auto;
+  height: auto;
+  display: block;
+}
+#playfield:not(.flat) #col-clues,
+#playfield:not(.flat) #row-clues,
+#playfield:not(.flat) #cells-grid {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+#playfield:not(.flat) .clue-line { position: absolute; }
+#playfield:not(.flat) .cell-btn { position: absolute; }
 .cell-btn {
   appearance: none;
   border: none;

@@ -1084,8 +1084,8 @@ class Game {
       // Keep DOM controls aligned with projected 3D targets.
       this._layoutCounter++;
       if (this._layoutCounter % 2 === 0 || this.renderer.transition) {
-        const rect = this.renderer.boardScreenRect();
-        if (rect) this.ui.layoutBoard(rect);
+        const proj = this.renderer.projectCells();
+        if (proj) this.ui.layoutBoard(proj);
       }
     } else if (this.renderer && this.phase === 'title') {
       this.renderer.update(dt, null);

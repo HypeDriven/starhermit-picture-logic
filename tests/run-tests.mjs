@@ -12,6 +12,7 @@ import {
   buildPuzzle, LESSONS, THEMES, PRACTICE_PRESETS,
 } from '../js/content.js';
 import { Rng, fnv1a } from '../js/prng.js';
+import { overlayLayout } from '../js/ui.js';
 
 let passed = 0, failed = 0;
 function ok(cond, name) {
@@ -333,6 +334,48 @@ section('undo via validated restore command');
   eq(res3.reason, 'restore-removes-fill', 'cannot unfill via restore');
   const sNo = createState({ ...spec5, constraints: { allowUndo: false } });
   eq(applyCommand(sNo, { type: 'restore', grid: sNo.grid }).reason, 'undo-disabled', 'undo disabled constraint');
+}
+
+// ---------------------------------------------------------------------------
+section('board overlay layout follows the projected trapezoid');
+{
+  // Synthetic perspective projection: rows get wider and more widely spaced
+  // toward the viewer, exactly like the 3D board. The overlay must map every
+  // projected cell center back to its own cell — a uniform grid cannot.
+  const rows = 8, cols = 8;
+  const centers = new Float32Array(rows * cols * 2);
+  for (let r = 0; r < rows; r++) {
+    const y = 100 + 70 * r * (1 + r * 0.07);        // perspective row stretch
+    const rowW = 400 * (1 + r * 0.09);              // perspective widening
+    for (let c = 0; c < cols; c++) {
+      centers[(r * cols + c) * 2] = 640 + (c - (cols - 1) / 2) * (rowW / (cols - 1));
+      centers[(r * cols + c) * 2 + 1] = y;
+    }
+  }
+  const lay = overlayLayout(rows, cols, centers);
+  eq(lay.cells.length, rows * cols, 'one overlay quad per cell');
+  let hits = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = centers[(r * cols + c) * 2], cy = centers[(r * cols + c) * 2 + 1];
+      const hit = lay.cells.findIndex(q => cx >= q.left && cx < q.left + q.width && cy >= q.top && cy < q.top + q.height);
+      if (hit === r * cols + c) hits++;
+    }
+  }
+  eq(hits, rows * cols, 'every projected center hit-tests to its own cell');
+  let tiled = true;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const a = lay.cells[r * cols + c], b = lay.cells[r * cols + c + 1];
+      if (Math.abs(a.left + a.width - b.left) > 1e-6) tiled = false;
+    }
+  }
+  ok(tiled, 'neighbor quads share edges — no dead zones between cells');
+  eq(lay.colClues.length, cols, 'one column clue quad per column');
+  eq(lay.rowClues.length, rows, 'one row clue quad per row');
+  // uniform-grid fit (the old mapping) would misplace corner cells by > 1 cell
+  const corner = lay.cells[(rows - 1) * cols + (cols - 1)];
+  ok(corner.left > 500, `corner quad tracks the widened near row (left=${corner.left.toFixed(1)})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
