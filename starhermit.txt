@@ -1,0 +1,3 @@
+name=Picture Logic
+launch=index.html
+server=server.js
