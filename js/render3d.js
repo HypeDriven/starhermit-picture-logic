@@ -217,8 +217,7 @@ export class BoardRenderer {
     this.bloomT = -1;
 
     // Reframe camera for the new board size.
-    const maxDim = Math.max(rows, cols);
-    const dist = Math.max(FRAMING.minDistance, maxDim * FRAMING.distancePerCell + 2.5);
+    const dist = this._preferredDistance();
     const to = { dist, pitch: FRAMING.pitch, yaw: 0, y: 0 };
     if (this.reducedMotion) {
       this.cameraPose = to;
@@ -380,7 +379,7 @@ export class BoardRenderer {
   _startBloom() {
     if (this.reducedMotion) { this.bloomT = 1; this._applyBloomFinal(); return; }
     this.bloomT = 0;
-    const dist = Math.max(FRAMING.minDistance, Math.max(this.rows, this.cols) * FRAMING.distancePerCell + 4.5);
+    const dist = this._preferredDistance() + 2;
     this._startTransition({ ...this.cameraPose }, { dist, pitch: FRAMING.pitch + 0.12, yaw: 0.35, y: 0 }, FRAMING.winDuration, easeInOut);
   }
 
@@ -433,9 +432,51 @@ export class BoardRenderer {
   }
 
   resetCamera() {
-    const maxDim = Math.max(this.rows || 8, this.cols || 8);
-    const dist = Math.max(FRAMING.minDistance, maxDim * FRAMING.distancePerCell + 2.5);
+    const dist = this._preferredDistance();
     this._startTransition({ ...this.cameraPose }, { dist, pitch: FRAMING.pitch, yaw: 0, y: 0 }, 0.6, easeOutCubic);
+  }
+
+  // Preferred rest distance: the authored linear framing, but never closer
+  // than what fits the whole board in the current view.
+  _preferredDistance() {
+    const maxDim = Math.max(this.rows || 8, this.cols || 8);
+    const base = Math.max(FRAMING.minDistance, maxDim * FRAMING.distancePerCell + 2.5);
+    return Math.max(base, this._fitDistance());
+  }
+
+  // Smallest distance at which every outer cell corner projects inside the
+  // view's safe margins (binary search against the live camera). Without
+  // this the near edge leaves the frustum on tight viewports and those
+  // cells become unreachable by pointer.
+  _fitDistance() {
+    const rows = this.rows || 8, cols = this.cols || 8;
+    const corners = [
+      [-cols / 2, 0.2, -rows / 2], [cols / 2, 0.2, -rows / 2],
+      [-cols / 2, 0.2, rows / 2], [cols / 2, 0.2, rows / 2],
+    ];
+    const fits = (dist) => {
+      this.cameraPose.dist = dist;
+      this._updateCamera();
+      this.camera.updateMatrixWorld();
+      for (const [x, y, z] of corners) {
+        const p = this._tmpV.set(x, y, z).project(this.camera);
+        if (Math.abs(p.x) > 0.86 || p.y > 0.58 || p.y < -0.92) return false;
+      }
+      return true;
+    };
+    const saved = this.cameraPose.dist;
+    let result = FRAMING.minDistance;
+    if (!fits(result)) {
+      let lo = FRAMING.minDistance, hi = 90;
+      for (let i = 0; i < 24; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid)) hi = mid; else lo = mid;
+      }
+      result = hi;
+    }
+    this.cameraPose.dist = saved;
+    this._updateCamera();
+    return result;
   }
 
   nudgeCamera(dYaw, dPitch) {
@@ -631,6 +672,10 @@ export class BoardRenderer {
     this.renderer.setPixelRatio(pr);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    // A narrower view may no longer fit the board: pull back until it does.
+    const fit = this._fitDistance();
+    if (this.transition) this.transition.to.dist = Math.max(this.transition.to.dist, fit);
+    else if (this.cameraPose.dist < fit) this.cameraPose.dist = fit;
     this._updateCamera();
   }
 

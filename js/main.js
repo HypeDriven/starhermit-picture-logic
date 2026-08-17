@@ -173,7 +173,10 @@ class Game {
     const $ = (id) => document.getElementById(id);
     const ui = this.ui;
 
-    $('btn-play').addEventListener('click', () => this.ui.show('screen-modes'));
+    $('btn-play').addEventListener('click', () => {
+      this.ui.buildModeList(this.store.progress);
+      this.ui.show('screen-modes');
+    });
     $('card-daily').addEventListener('click', () => this.startDaily());
     $('card-journey').addEventListener('click', () => { this.showJourney(); });
     $('card-learn').addEventListener('click', () => { this.showLearn(); });
