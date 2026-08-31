@@ -1,13 +1,39 @@
-// Picture Logic — audio engine. All sounds are original procedural
-// transients synthesized with WebAudio: no samples, no external assets.
-// Buses: music / effects / ambience (independent sliders). A seeded
-// variant stream keeps pitch choices consistent for a given game seed.
+// Picture Logic — audio engine. Authored one-shot samples (sfx/*.opus) back
+// the named events below; procedural WebAudio synthesis remains as the
+// fallback while a sample loads or if fetching/decoding fails. Music and
+// ambience stay fully procedural. Buses: music / effects / ambience
+// (independent sliders). A seeded variant stream keeps pitch choices
+// consistent for a given game seed.
 'use strict';
 
 import { Rng } from './prng.js';
 
 const SCALE = [0, 3, 5, 7, 10]; // minor pentatonic — gentle, always consonant
 const BASE_FREQ = 220;
+
+// Runtime event map: every authored clip in sfx/ is reachable from an
+// existing event case. Events with several clips pick one per trigger via the
+// seeded variant stream; all clips in a group share the same meaning.
+const SAMPLE_MAP = {
+  ack: [ // generic UI feedback: clicks, navigation, panels, toggles, toasts
+    'ui-click', 'ui-confirm', 'ui-back', 'ui-tab-switch', 'ui-scroll-tick',
+    'ui-drawer-open', 'ui-modal-open', 'ui-panel-close', 'ui-toast-notify',
+    'ui-settings-saved', 'ui-toggle', 'ui-resume', 'daily-ready',
+  ],
+  focus: ['ui-hover'],
+  fill: ['cell-fill', 'drag-start', 'drag-sweep'], // pencil/stamp marking family
+  mark: ['cell-cross'],
+  clear: ['board-reset'], // wiping a mark / the grid clean
+  error: ['ui-error'],
+  line: ['clue-complete', 'row-complete', 'column-complete', 'tutorial-step'],
+  hint: ['hint-reveal'],
+  undo: ['undo-move'],
+  pause: ['ui-pause'],
+  win: ['win-stinger', 'puzzle-reveal', 'new-record', 'streak-milestone', 'ui-success', 'journey-unlock'],
+  fail: ['level-fail'],
+  tick: ['ui-timer-warning'],
+  countdown: ['ui-countdown-tick'],
+};
 
 export class AudioEngine {
   constructor() {
@@ -20,6 +46,7 @@ export class AudioEngine {
     this._musicTimer = null;
     this._ambNodes = null;
     this._lastEventAt = new Map(); // per-event minimum gap (double-commit guard)
+    this._samples = new Map(); // clip name -> AudioBuffer | 'loading' | null (failed)
   }
 
   // Must be called from a user gesture at least once.
@@ -106,6 +133,32 @@ export class AudioEngine {
     return BASE_FREQ * Math.pow(2, (step + this.variantRng.int(0, semitoneJitter)) / 12) * oct;
   }
 
+  // Lazy-fetch and decode sfx/<name>.opus once the context exists (i.e.
+  // after the user-gesture unlock in ensure()). Failures are cached as null
+  // so the event keeps using its procedural fallback from then on.
+  _loadSample(name) {
+    if (this._samples.has(name)) return;
+    this._samples.set(name, 'loading');
+    fetch(`sfx/${name}.opus`)
+      .then(r => { if (!r.ok) throw new Error(`http ${r.status}`); return r.arrayBuffer(); })
+      .then(ab => this.ctx.decodeAudioData(ab))
+      .then(buf => this._samples.set(name, buf))
+      .catch(() => this._samples.set(name, null));
+  }
+
+  // Play a cached clip through the effects bus. Returns false while the clip
+  // is still loading or after a load failure, so the caller runs synthesis.
+  _playSample(name) {
+    const entry = this._samples.get(name);
+    if (entry === undefined) { this._loadSample(name); return false; }
+    if (entry === 'loading' || entry === null) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = entry;
+    src.connect(this.buses.effects);
+    src.start();
+    return true;
+  }
+
   // Event hierarchy: ack < legal move < combo/goal < round completion.
   // Returns a text caption for meaningful audio (accessibility cue) or null.
   event(name) {
@@ -114,6 +167,12 @@ export class AudioEngine {
     const last = this._lastEventAt.get(name) || 0;
     if (now - last < 40) return caption(name); // idempotent double-trigger guard
     this._lastEventAt.set(name, now);
+    const mapped = SAMPLE_MAP[name];
+    if (mapped) {
+      const clip = mapped.length === 1 ? mapped[0] : this.variantRng.pick(mapped);
+      if (this._playSample(clip)) return caption(name);
+      // still loading or failed: fall through to procedural synthesis
+    }
     switch (name) {
       case 'ack': this._tone({ freq: 660, dur: 0.05, type: 'triangle', gain: 0.08 }); break;
       case 'focus': this._tone({ freq: 520, dur: 0.03, type: 'sine', gain: 0.04 }); break;
