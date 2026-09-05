@@ -523,7 +523,7 @@ export class UI {
       ['Hints', -comp.hintPenalty, 'neg'],
     ];
     $('score-table').innerHTML =
-      rows.map(([k, v, cls]) => `<tr class="${cls || ''}"><td>${k}</td><td>${v >= 0 ? '+' : ''}${v.toLocaleString()}</td></tr>`).join('') +
+      rows.map(([k, v, cls]) => `<tr class="${cls || ''}"><td>${k}</td><td>${v < 0 ? '-' : '+'}${Math.abs(v).toLocaleString()}</td></tr>`).join('') +
       `<tr class="total"><td>Total</td><td>${comp.total.toLocaleString()}</td></tr>`;
     $('result-progress').textContent = progressText;
     const ac = $('result-achv-card');

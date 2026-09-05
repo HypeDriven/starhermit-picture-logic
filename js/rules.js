@@ -629,6 +629,7 @@ export function createReplayEnvelope(state, contentVersion, buildVersion) {
     id: state.id,
     seed: state.seed,
     rows: state.rows, cols: state.cols,
+    parMs: state.parMs,
     solutionHash: fnv1a(state.solution.join('')).toString(16),
     initialHash: stateHash(state),
     startedAtOffsetMs: 0,
@@ -658,6 +659,7 @@ export function validateReplay(envelope, solution) {
   const state = createState({
     id: envelope.id, seed: envelope.seed,
     rows: envelope.rows, cols: envelope.cols, solution,
+    parMs: envelope.parMs,
   });
   if (stateHash(state) !== envelope.initialHash) {
     return { valid: false, reason: 'initial-hash-mismatch' };
@@ -675,7 +677,8 @@ export function validateReplay(envelope, solution) {
     if (stateHash(state) !== envelope.terminal.finalHash) {
       return { valid: false, reason: 'final-hash-mismatch' };
     }
-    return { valid: true, score: scoreComponents(state) };
+    const score = scoreComponents(state);
+    return { valid: true, score, mistakes: state.mistakes, elapsedMs: state.elapsedMs };
   }
   return { valid: true, score: null };
 }

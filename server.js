@@ -9,7 +9,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateReplay, scoreComponents } from './js/rules.js';
+import { validateReplay } from './js/rules.js';
 import { generatePuzzle } from './js/content.js';
 import { fnv1a } from './js/prng.js';
 
@@ -152,7 +152,7 @@ const server = http.createServer(async (req, res) => {
       const entries = boards.get(board) || [];
       entries.push({
         name, score: verdict.score.total,
-        mistakes: body.mistakes ?? 0, elapsedMs: body.elapsedMs ?? 0,
+        mistakes: verdict.mistakes ?? 0, elapsedMs: verdict.elapsedMs ?? 0,
         ruleset: body.ruleset ?? null, build: body.build ?? null,
         seed: body.seed, at: new Date().toISOString(),
       });
