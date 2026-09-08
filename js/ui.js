@@ -57,12 +57,14 @@ export class UI {
   overlay(id, open) {
     const el = $(id);
     if (open) {
-      this._lastFocus = document.activeElement;
+      // Per-overlay bookkeeping: overlays can stack (settings over pause), so
+      // the trap handler and the focus-return target must not be shared.
+      el._lastFocus = document.activeElement;
       el.classList.add('active');
       const first = el.querySelector('button.primary, button');
       requestAnimationFrame(() => first?.focus());
       // Simple focus trap.
-      el.addEventListener('keydown', this._trap = (e) => {
+      el.addEventListener('keydown', el._trap = (e) => {
         if (e.key !== 'Tab') return;
         const focusables = [...el.querySelectorAll('button, input, select, [tabindex]')]
           .filter(f => !f.disabled && f.offsetParent !== null);
@@ -73,9 +75,11 @@ export class UI {
       });
     } else {
       el.classList.remove('active');
-      el.removeEventListener('keydown', this._trap);
-      if (this._lastFocus && document.contains(this._lastFocus)) {
-        this._lastFocus.focus({ preventScroll: true });
+      if (el._trap) { el.removeEventListener('keydown', el._trap); el._trap = null; }
+      const back = el._lastFocus;
+      el._lastFocus = null;
+      if (back && document.contains(back) && back.offsetParent !== null) {
+        back.focus({ preventScroll: true });
       }
     }
   }
@@ -300,19 +304,25 @@ export class UI {
       e.preventDefault();
       const cell = { r: +b.dataset.r, c: +b.dataset.c };
       this.setCursor(cell.r, cell.c, false);
-      let action = this._actionFor(e);
+      const action = this._actionFor(e);
+      this._paint = { action, done: new Set() };
       // Hold-to-mark (touch): a press held past the threshold becomes a mark.
+      // The stroke's first action is deferred until tap-vs-hold is decided —
+      // committing a fill immediately would both mis-fill and (via the stroke
+      // set) block the later mark.
       if (this.holdToMark && e.pointerType === 'touch' && action === 'fill') {
-        action = 'fill';
+        this._paint.pending = cell;
         this._holdTimer = setTimeout(() => {
-          if (this._paint) {
+          this._holdTimer = null;
+          if (this._paint?.pending) {
             this._paint.action = 'mark';
+            this._paint.pending = null;
             this._applyPaint(cell);
           }
         }, 380);
+      } else {
+        this._applyPaint(cell);
       }
-      this._paint = { action, done: new Set() };
-      this._applyPaint(cell);
       grid.setPointerCapture?.(e.pointerId);
     });
     grid.addEventListener('pointermove', (e) => {
@@ -320,19 +330,35 @@ export class UI {
       if (b) {
         const cell = { r: +b.dataset.r, c: +b.dataset.c };
         this.onHoverCell(cell);
-        if (this._paint) this._applyPaint(cell);
+        if (this._paint) {
+          if (this._paint.pending && (cell.r !== this._paint.pending.r || cell.c !== this._paint.pending.c)) {
+            // Dragged before the hold threshold: this is a fill stroke.
+            const origin = this._paint.pending;
+            clearTimeout(this._holdTimer); this._holdTimer = null;
+            this._paint.pending = null;
+            this._applyPaint(origin);
+          }
+          if (!this._paint.pending) this._applyPaint(cell);
+        }
       } else {
         this.onHoverCell(null);
       }
     });
     const end = (e) => {
       if (this._holdTimer) { clearTimeout(this._holdTimer); this._holdTimer = null; }
+      // Released before the hold threshold: a plain tap fills.
+      if (this._paint?.pending) this._applyPaint(this._paint.pending);
       this._paint = null;
       grid.releasePointerCapture?.(e.pointerId);
     };
     grid.addEventListener('pointerup', end);
-    grid.addEventListener('pointercancel', end);
-    grid.addEventListener('lostpointercapture', () => { this._paint = null; });
+    grid.addEventListener('pointercancel', () => {
+      clearTimeout(this._holdTimer); this._holdTimer = null; this._paint = null;
+    });
+    grid.addEventListener('lostpointercapture', (e) => {
+      if (this._holdTimer) { clearTimeout(this._holdTimer); this._holdTimer = null; }
+      this._paint = null;
+    });
     return true;
   }
 
@@ -479,6 +505,8 @@ export class UI {
       const rs = Math.ceil(remain / 1000);
       $('hud-time').textContent = `−${Math.floor(rs / 60)}:${String(rs % 60).padStart(2, '0')}`;
       $('hud-time').parentElement.classList.toggle('danger', remain < 20000);
+    } else {
+      $('hud-time').parentElement.classList.remove('danger');
     }
     $('btn-undo').disabled = !opts.canUndo;
     $('btn-hint').disabled = !opts.canHint;
@@ -523,7 +551,7 @@ export class UI {
       ['Hints', -comp.hintPenalty, 'neg'],
     ];
     $('score-table').innerHTML =
-      rows.map(([k, v, cls]) => `<tr class="${cls || ''}"><td>${k}</td><td>${v < 0 ? '-' : '+'}${Math.abs(v).toLocaleString()}</td></tr>`).join('') +
+      rows.map(([k, v, cls]) => `<tr class="${v < 0 ? cls || '' : ''}"><td>${k}</td><td>${v < 0 ? '-' : '+'}${Math.abs(v).toLocaleString()}</td></tr>`).join('') +
       `<tr class="total"><td>Total</td><td>${comp.total.toLocaleString()}</td></tr>`;
     $('result-progress').textContent = progressText;
     const ac = $('result-achv-card');
@@ -546,7 +574,7 @@ export class UI {
         entries.map((e, i) => `<tr class="${e.me ? 'me' : ''}"><td>${i + 1}</td><td>${escapeHtml(e.name)}</td>
           <td class="num">${e.score.toLocaleString()}</td><td class="num">${e.mistakes}</td>
           <td class="num">${Math.floor(e.elapsedMs / 60000)}:${String(Math.floor(e.elapsedMs / 1000) % 60).padStart(2, '0')}</td>
-          <td class="dim small">${e.seed ?? ''}</td></tr>`).join('')}</tbody></table>`;
+          <td class="dim small">${escapeHtml(String(e.seed ?? ''))}</td></tr>`).join('')}</tbody></table>`;
     };
     $('daily-board').innerHTML = table(dailyEntries, 'No validated scores yet today — be the first light.');
     $('local-board').innerHTML = table(localEntries, 'Finish any puzzle to post a local best.');

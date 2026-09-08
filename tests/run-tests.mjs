@@ -378,5 +378,140 @@ section('board overlay layout follows the projected trapezoid');
   ok(corner.left > 500, `corner quad tracks the widened near row (left=${corner.left.toFixed(1)})`);
 }
 
+// ---------------------------------------------------------------------------
+section('replay: ticks, undo and constraints survive the envelope');
+{
+  // Mirrors the live session flow: ticks from the frame loop and cell actions
+  // from input are ALL recorded. A run with real elapsed time must re-validate
+  // to the identical score (previously ticks were never recorded, so any
+  // non-instant ranked submission was rejected with a hash/score mismatch).
+  const spec = dailySpec('2026-09-07');
+  const p = generatePuzzle(spec);
+  const s = createState({
+    id: p.id, seed: p.seed, rows: p.rows, cols: p.cols,
+    solution: p.solution, parMs: spec.parMs, constraints: spec.constraints,
+  });
+  const env = createReplayEnvelope(s, 1, 'test');
+  const rec = (cmd) => { const r = applyCommand(s, cmd); replayRecord(env, s, cmd, r); return r; };
+  for (let i = 0; i < 40; i++) rec({ type: 'tick', ms: 500 }); // 20 s of play
+  for (let i = 0; i < s.solution.length; i++) {
+    if (s.solution[i] === 1) rec({ type: 'fill', r: Math.floor(i / s.cols), c: i % s.cols });
+  }
+  eq(s.status, STATUS.COMPLETE, 'timed daily completes');
+  const expected = scoreComponents(s).total;
+  const v = validateReplay(JSON.parse(JSON.stringify(env)), p.solution);
+  ok(v.valid, `timed replay validates (${v.reason || 'ok'})`);
+  eq(v.score?.total, expected, 'replay score matches client score with elapsed time');
+  eq(v.elapsedMs, 20000, 'authoritative elapsed time survives replay');
+
+  // Dropping the ticks from the log must be detected, not silently accepted.
+  const noTicks = JSON.parse(JSON.stringify(env));
+  noTicks.commands = noTicks.commands.filter(r => r.cmd.type !== 'tick');
+  ok(!validateReplay(noTicks, p.solution).valid, 'replay without recorded ticks is rejected');
+
+  // Undo mid-run: the restore command (with its grid) is part of the log.
+  const s2 = createState(spec5);
+  const env2 = createReplayEnvelope(s2, 1, 'test');
+  const rec2 = (cmd) => { const r = applyCommand(s2, cmd); replayRecord(env2, s2, cmd, r); return r; };
+  rec2({ type: 'mark', r: 0, c: 2 });
+  const snap = s2.grid.slice();
+  rec2({ type: 'mark', r: 1, c: 1 });
+  rec2({ type: 'restore', grid: snap }); // undo, as main.js records it
+  for (let i = 0; i < SOL5.length; i++) {
+    if (SOL5[i] === 1) rec2({ type: 'fill', r: Math.floor(i / 5), c: i % 5 });
+  }
+  eq(s2.status, STATUS.COMPLETE, 'run with undo completes');
+  const v2 = validateReplay(JSON.parse(JSON.stringify(env2)), SOL5);
+  ok(v2.valid, `replay with undo validates (${v2.reason || 'ok'})`);
+
+  // Constrained (challenge) runs: the envelope carries constraints so a
+  // failure by mistake-limit replays to the identical terminal state.
+  const s3 = createState({ ...spec5, constraints: { maxMistakes: 2, allowUndo: false } });
+  const env3 = createReplayEnvelope(s3, 1, 'test');
+  const rec3 = (cmd) => { const r = applyCommand(s3, cmd); replayRecord(env3, s3, cmd, r); return r; };
+  rec3({ type: 'fill', r: 0, c: 2 }); // mistake
+  rec3({ type: 'fill', r: 1, c: 1 }); // mistake -> failed
+  eq(s3.status, STATUS.FAILED, 'constrained run fails on mistakes');
+  eq(env3.terminal?.reason, REASON.MISTAKES, 'terminal recorded');
+  const v3 = validateReplay(JSON.parse(JSON.stringify(env3)), SOL5);
+  ok(v3.valid, `failed constrained replay validates (${v3.reason || 'ok'})`);
+}
+
+// ---------------------------------------------------------------------------
+section('lessons are completable through the gating rules');
+{
+  // Simulates a player who performs exactly what each step banner asks,
+  // under the same gating/clamping semantics as main.js advanceLesson
+  // (dynamic counts from the live board, clamped, zero-remaining steps
+  // skipped). Guards against propagation pre-satisfying a required action.
+  const remaining = (state, req, type) => {
+    let n = 0;
+    for (let i = 0; i < state.solution.length; i++) {
+      const r = Math.floor(i / state.cols), c = i % state.cols;
+      if (req.r !== undefined && req.r !== r) continue;
+      if (req.c !== undefined && req.c !== c) continue;
+      if (type === 'fill' && state.solution[i] === 1 && state.grid[i] !== CELL.FILLED) n++;
+      if (type === 'mark' && state.solution[i] === 0 && state.grid[i] === CELL.UNKNOWN) n++;
+    }
+    return n;
+  };
+  for (const lesson of LESSONS) {
+    const state = createState({
+      id: lesson.id, seed: 1, rows: lesson.board.rows, cols: lesson.board.cols,
+      solution: lesson.board.solution, parMs: 600000,
+      constraints: { allowHints: lesson.id === 'lesson-5', allowUndo: true },
+    });
+    const L = { step: -1, count: 0, reqCount: null };
+    const advance = () => {
+      L.step++; L.count = 0; L.reqCount = null;
+      if (L.step >= lesson.steps.length) return;
+      const st = lesson.steps[L.step];
+      L.reqCount = st.requireCount ?? null;
+      if (st.require.type === 'fill' || st.require.type === 'mark') {
+        const left = remaining(state, st.require, st.require.type);
+        if (left === 0) { advance(); return; }
+        L.reqCount = Math.min(L.reqCount ?? left, left);
+      }
+    };
+    advance();
+    let stuck = false;
+    for (let guard = 0; guard < 500 && state.status === STATUS.ACTIVE && L.step < lesson.steps.length; guard++) {
+      const st = lesson.steps[L.step];
+      let done = false;
+      if (st.require.type === 'hint') {
+        done = applyCommand(state, { type: 'hint' }).ok;
+      } else {
+        for (let r = 0; r < state.rows && !done; r++) {
+          for (let c = 0; c < state.cols && !done; c++) {
+            if (st.require.r !== undefined && st.require.r !== r) continue;
+            if (st.require.c !== undefined && st.require.c !== c) continue;
+            // Only try cells the step intends: fills that are truly filled,
+            // marks that are truly empty — a player reading the clues.
+            const i = r * state.cols + c;
+            if (st.require.type === 'fill' && state.solution[i] !== 1) continue;
+            if (st.require.type === 'mark' && state.solution[i] !== 0) continue;
+            done = applyCommand(state, { type: st.require.type, r, c }).ok;
+          }
+        }
+      }
+      if (!done) { stuck = true; break; }
+      L.count++;
+      if (L.count >= (L.reqCount || 1)) advance();
+    }
+    ok(!stuck, `${lesson.id} never asks for an impossible action`);
+    // Finish freely once the steps are done (gate opens after the last step).
+    for (let guard = 0; guard < 500 && state.status === STATUS.ACTIVE; guard++) {
+      let progressed = false;
+      for (let i = 0; i < state.solution.length; i++) {
+        if (state.solution[i] === 1 && state.grid[i] !== CELL.FILLED) {
+          progressed = applyCommand(state, { type: 'fill', r: Math.floor(i / state.cols), c: i % state.cols }).ok || progressed;
+        }
+      }
+      if (!progressed) break;
+    }
+    eq(state.status, STATUS.COMPLETE, `${lesson.id} reaches completion`);
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

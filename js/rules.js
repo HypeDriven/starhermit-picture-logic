@@ -430,7 +430,8 @@ export function applyCommand(state, cmd) {
     }
     case 'hint': {
       const h = hintCell(state);
-      if (!h) return { ok: false, reason: 'nothing-to-reveal', events: [] };      state.hints++;
+      if (!h) return { ok: false, reason: 'nothing-to-reveal', events: [] };
+      state.hints++;
       const idx = h.r * cols + h.c;
       if (h.value === 1) {
         state.grid[idx] = CELL.FILLED;
@@ -630,6 +631,7 @@ export function createReplayEnvelope(state, contentVersion, buildVersion) {
     seed: state.seed,
     rows: state.rows, cols: state.cols,
     parMs: state.parMs,
+    constraints: { ...state.constraints },
     solutionHash: fnv1a(state.solution.join('')).toString(16),
     initialHash: stateHash(state),
     startedAtOffsetMs: 0,
@@ -659,7 +661,7 @@ export function validateReplay(envelope, solution) {
   const state = createState({
     id: envelope.id, seed: envelope.seed,
     rows: envelope.rows, cols: envelope.cols, solution,
-    parMs: envelope.parMs,
+    parMs: envelope.parMs, constraints: envelope.constraints,
   });
   if (stateHash(state) !== envelope.initialHash) {
     return { valid: false, reason: 'initial-hash-mismatch' };
@@ -678,7 +680,7 @@ export function validateReplay(envelope, solution) {
       return { valid: false, reason: 'final-hash-mismatch' };
     }
     const score = scoreComponents(state);
-    return { valid: true, score, mistakes: state.mistakes, elapsedMs: state.elapsedMs };
+    return { valid: true, score, status: state.status, mistakes: state.mistakes, elapsedMs: state.elapsedMs };
   }
   return { valid: true, score: null };
 }

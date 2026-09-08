@@ -9,9 +9,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateReplay } from './js/rules.js';
-import { generatePuzzle } from './js/content.js';
-import { fnv1a } from './js/prng.js';
+import { validateSubmission } from './js/submission.js';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = process.env.PORT || 8080;
@@ -72,36 +70,6 @@ function rateLimit(ip, limit = 60, windowMs = 60000) {
 // Score validation: rebuild the puzzle from its public seed and re-simulate.
 // ---------------------------------------------------------------------------
 
-function validateSubmission(body) {
-  const { seed, originSeed, rows, cols, density, envelope } = body || {};
-  const genSeed = originSeed || seed;
-  if (typeof genSeed !== 'string' || !Number.isInteger(rows) || !Number.isInteger(cols)) {
-    return { ok: false, status: 400, error: 'missing-fields' };
-  }
-  if (rows < 3 || rows > 25 || cols < 3 || cols > 25) return { ok: false, status: 400, error: 'bad-size' };
-  if (!envelope || envelope.schema !== 1) return { ok: false, status: 400, error: 'bad-envelope' };
-  if (!Array.isArray(envelope.commands) || envelope.commands.length > 20000) {
-    return { ok: false, status: 400, error: 'bad-command-log' };
-  }
-  let puzzle;
-  try {
-    puzzle = generatePuzzle({
-      seed: parseInt(genSeed, 16), rows, cols,
-      density: typeof density === 'number' ? density : 0.6,
-    });
-  } catch {
-    return { ok: false, status: 422, error: 'unknown-content' };
-  }
-  const solHash = fnv1a(puzzle.solution.join('')).toString(16);
-  if (solHash !== envelope.solutionHash) return { ok: false, status: 422, error: 'solution-mismatch' };
-  const verdict = validateReplay(envelope, puzzle.solution);
-  if (!verdict.valid) return { ok: false, status: 422, error: `replay-invalid:${verdict.reason}` };
-  if (!verdict.score || !envelope.terminal) return { ok: false, status: 422, error: 'incomplete-run' };
-  // Plausibility: claimed score must equal the re-simulated score exactly.
-  if (verdict.score.total !== body.score) return { ok: false, status: 422, error: 'score-mismatch' };
-  return { ok: true, score: verdict.score };
-}
-
 // ---------------------------------------------------------------------------
 
 function json(res, status, obj, headers = {}) {
@@ -149,12 +117,15 @@ const server = http.createServer(async (req, res) => {
       }
       const verdict = validateSubmission(body);
       if (!verdict.ok) return json(res, verdict.status, { error: verdict.error });
+      // Client-controlled strings are stored and later re-served to every
+      // viewer of the board: keep them short and markup-free.
+      const safe = (v, n = 32) => String(v ?? '').slice(0, n).replace(/[^a-zA-Z0-9:._-]/g, '');
       const entries = boards.get(board) || [];
       entries.push({
         name, score: verdict.score.total,
         mistakes: verdict.mistakes ?? 0, elapsedMs: verdict.elapsedMs ?? 0,
-        ruleset: body.ruleset ?? null, build: body.build ?? null,
-        seed: body.seed, at: new Date().toISOString(),
+        ruleset: safe(body.ruleset, 16) || null, build: safe(body.build, 16) || null,
+        seed: safe(body.seed), at: new Date().toISOString(),
       });
       entries.sort((a, b) => b.score - a.score || a.mistakes - b.mistakes || a.elapsedMs - b.elapsedMs);
       boards.set(board, entries.slice(0, 100));
@@ -175,7 +146,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---------------- Static distribution
-    let path = normalize(decodeURIComponent(url.pathname));
+    let decoded;
+    try { decoded = decodeURIComponent(url.pathname); } catch { return json(res, 400, { error: 'bad-path' }); }
+    if (decoded.split(/[\\/]/).some(p => p.startsWith('.')) || decoded.startsWith('/data/')) { res.writeHead(403); return res.end(); }
+    let path = normalize(decoded);
     if (path.includes('..')) { res.writeHead(403); return res.end(); }
     if (path === '/' || path === '\\') path = '/index.html';
     const file = join(ROOT, path);

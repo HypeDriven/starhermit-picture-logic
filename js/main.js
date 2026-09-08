@@ -43,6 +43,7 @@ class Game {
     this._gamepad = { prev: [], axisAt: 0 };
     this._remapTarget = null;
     this._layoutCounter = 0;
+    this._countdownGen = 0;
   }
 
   // ------------------------------------------------------------------ boot
@@ -450,10 +451,11 @@ class Game {
   runCountdown() {
     const rm = this.store.settings.reducedMotion;
     this.phase = 'countdown';
+    const gen = ++this._countdownGen; // stale chains from a previous session die here
     const steps = rm ? ['Glow'] : ['3', '2', '1', 'Glow'];
     let i = 0;
     const next = () => {
-      if (!this.session || this.phase !== 'countdown') return;
+      if (!this.session || this.phase !== 'countdown' || gen !== this._countdownGen) return;
       if (i >= steps.length) {
         this.ui.countdown(null);
         this.phase = 'active';
@@ -475,9 +477,9 @@ class Game {
     if (kind === 'journey') this.startJourney(this.session.spec);
     else if (kind === 'daily') this.startDaily();
     else if (kind === 'practice') {
-      const spec = this.session.spec;
-      this.session = this.makeSession('practice', spec, this.session.label);
-      this.session.presetId = this.session.spec.presetId;
+      const prev = this.session;
+      this.session = this.makeSession('practice', prev.spec, prev.label);
+      this.session.presetId = prev.presetId;
       this.beginPlay();
     }
     else if (kind === 'challenge') this.startChallenge(this.session.spec);
@@ -504,12 +506,17 @@ class Game {
     if (L.step >= L.def.steps.length) { this.ui.lessonBanner(null); return; }
     const st = L.def.steps[L.step];
     // Dynamic requirement count: when the step targets a row/column without a
-    // count, count remaining matching actions from the live board.
-    if (!st.requireCount && st.require.type === 'fill') {
-      st.requireCount = this.countRemaining(st.require);
-    }
-    if (!st.requireCount && st.require.type === 'mark') {
-      st.requireCount = this.countRemainingMark(st.require);
+    // count, count remaining matching actions from the live board. Clamp every
+    // count (explicit or dynamic) to what is actually still possible — line
+    // propagation can legitimately pre-satisfy a step (e.g. auto-crossed
+    // empties), and a step with nothing left to do is skipped, never a wall.
+    // The count lives on the session, never on the shared lesson definition.
+    L.reqCount = st.requireCount ?? null;
+    if (st.require.type === 'fill' || st.require.type === 'mark') {
+      const remaining = st.require.type === 'fill'
+        ? this.countRemaining(st.require) : this.countRemainingMark(st.require);
+      if (remaining === 0) { this.advanceLesson(); return; }
+      L.reqCount = Math.min(L.reqCount ?? remaining, remaining);
     }
     this.ui.lessonBanner(st.text, `${L.def.name} · step ${L.step + 1}/${L.def.steps.length}`);
     this.ui.announce(st.text);
@@ -558,9 +565,8 @@ class Game {
   lessonProgress(cmd) {
     const L = this.session?.lesson;
     if (!L || L.step < 0 || L.step >= L.def.steps.length) return;
-    const st = L.def.steps[L.step];
     L.count++;
-    if (L.count >= (st.requireCount || 1)) this.advanceLesson();
+    if (L.count >= (L.reqCount || 1)) this.advanceLesson();
   }
 
   // ------------------------------------------------------------------ actions
@@ -642,7 +648,7 @@ class Game {
     if (!snap) { this.ui.toast('Nothing to undo.'); return; }
     const res = applyCommand(s, { type: 'restore', grid: snap });
     if (!res.ok) { this.explainInvalid(res.reason); return; }
-    replayRecord(this.session.replayEnv, s, { type: 'restore' }, res);
+    replayRecord(this.session.replayEnv, s, { type: 'restore', grid: snap }, res);
     this.handleEvents(res.events);
     this.ui.syncBoard(s);
     this.renderer?.syncState(s.grid, s.rows, s.cols, res.events);
@@ -708,6 +714,7 @@ class Game {
       stateJson: serialize(s.state),
       stateElapsed: s.state.elapsedMs,
       undoStack: s.undoStack.slice(-50),
+      replayEnv: s.replayEnv, // ranked resumes must keep their full input log
     };
     s.saveAt = Date.now();
     this.store.saveProgress();
@@ -723,7 +730,7 @@ class Game {
         label: snap.label, ranked: !!snap.spec.ranked,
         undoStack: snap.undoStack || [],
         lesson: null,
-        replayEnv: createReplayEnvelope(state, CONTENT_VERSION, BUILD_VERSION),
+        replayEnv: snap.replayEnv || createReplayEnvelope(state, CONTENT_VERSION, BUILD_VERSION),
         saveAt: 0,
         presetId: snap.presetId,
       };
@@ -782,7 +789,7 @@ class Game {
         progressText = `Daily streak: ${streak} day(s).`;
         if (streak >= 7 && this.grant('daily-7')) unlocked.push('Week of Light');
       } else progressText = 'The daily board keeps your best attempt — try again.';
-      this.submitRanked(comp);
+      if (won) this.submitRanked(comp); // ranked boards record completions only
     } else if (s.kind === 'challenge') {
       const prev = p.challenges[s.spec.id];
       if (won && (!prev || comp.total > prev.score)) {
@@ -790,7 +797,7 @@ class Game {
         progressText = 'New personal best for this challenge.';
       } else progressText = won ? 'Challenge complete.' : 'Challenge failed — the constraint held.';
       this.store.saveProgress();
-      this.submitRanked(comp);
+      if (won) this.submitRanked(comp);
     } else if (s.kind === 'practice') {
       p.practicePlays++;
       this.store.saveProgress();
@@ -1068,8 +1075,12 @@ class Game {
       if (this._tickAcc >= 500) {
         const ms = Math.floor(this._tickAcc);
         this._tickAcc -= ms;
-        const res = applyCommand(this.session.state, { type: 'tick', ms });
+        const cmd = { type: 'tick', ms };
+        const res = applyCommand(this.session.state, cmd);
         if (res.ok) {
+          // Ticks are authoritative inputs: they belong in the replay log or
+          // the server's re-simulation diverges (elapsed time, score, hashes).
+          replayRecord(this.session.replayEnv, this.session.state, cmd, res);
           this.updateHud();
           const term = res.events.find(e => e.type === 'terminal');
           if (term) { this.onTerminal(); }
