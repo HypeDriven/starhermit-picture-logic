@@ -26,6 +26,7 @@ class Game {
   constructor() {
     this.store = new Store();
     this.ui = new UI();
+    this.ui.app = this;
     this.audio = new AudioEngine();
     this.renderer = null;
     this.flat = false;
@@ -1136,6 +1137,31 @@ class Game {
     const pf = document.getElementById('playfield');
     if (this.renderer && pf.clientWidth) this.renderer.resize(pf.clientWidth, pf.clientHeight);
     if (this.flat && this.session) this.ui.layoutFlat(this.session.state);
+    this.syncSafeInsets();
+  }
+
+  // Chrome overlaying the playfield (lesson banner, tray) is carved out of the
+  // board's safe area so no required cell hides beneath it.
+  syncSafeInsets() {
+    if (!this.renderer) return;
+    const pf = document.getElementById('playfield');
+    if (!pf || !pf.clientWidth) return;
+    const cr = pf.getBoundingClientRect();
+    const W = cr.width, H = cr.height;
+    const ins = { left: 0, right: 0, top: 0, bottom: 0 };
+    for (const id of ['lesson-banner', 'tray']) {
+      const el = document.getElementById(id);
+      if (!el || el.hidden || !el.offsetParent) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const e = { l: (r.left - cr.left) / W, t: (r.top - cr.top) / H, r: (r.right - cr.left) / W, b: (r.bottom - cr.top) / H };
+      if (e.b <= 0 || e.t >= 1) continue; // outside the playfield
+      if (e.r - e.l < 0.5 && e.r <= 0.5) ins.left = Math.max(ins.left, e.r);
+      else if (e.r - e.l < 0.5 && e.l >= 0.5) ins.right = Math.max(ins.right, 1 - e.l);
+      else if (e.t >= 0.5) ins.bottom = Math.max(ins.bottom, 1 - e.t);
+      else ins.top = Math.max(ins.top, e.b);
+    }
+    this.renderer.setSafeInsets(ins);
   }
 
   // ------------------------------------------------------------------ telemetry

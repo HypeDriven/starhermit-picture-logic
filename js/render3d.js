@@ -448,19 +448,32 @@ export class BoardRenderer {
   // view's safe margins (binary search against the live camera). Without
   // this the near edge leaves the frustum on tight viewports and those
   // cells become unreachable by pointer.
+  // Safe NDC bounds: the default margins, tightened by whatever HUD chrome
+  // (lesson banner, tray) overlays the canvas — see setSafeInsets.
+  setSafeInsets(ins) {
+    this.safeInsets = ins || null;
+    const fit = this._fitDistance();
+    if (this.transition) this.transition.to.dist = Math.max(this.transition.to.dist, fit);
+    else if (this.cameraPose.dist < fit) this.cameraPose.dist = fit;
+    this._updateCamera();
+  }
+
   _fitDistance() {
     const rows = this.rows || 8, cols = this.cols || 8;
     const corners = [
       [-cols / 2, 0.2, -rows / 2], [cols / 2, 0.2, -rows / 2],
       [-cols / 2, 0.2, rows / 2], [cols / 2, 0.2, rows / 2],
     ];
+    const ins = this.safeInsets || {};
+    const xMin = -0.86 + 2 * (ins.left || 0), xMax = 0.86 - 2 * (ins.right || 0);
+    const yMax = Math.min(0.58, 1 - 2 * (ins.top || 0) - 0.04), yMin = Math.max(-0.92, -1 + 2 * (ins.bottom || 0) + 0.04);
     const fits = (dist) => {
       this.cameraPose.dist = dist;
       this._updateCamera();
       this.camera.updateMatrixWorld();
       for (const [x, y, z] of corners) {
         const p = this._tmpV.set(x, y, z).project(this.camera);
-        if (Math.abs(p.x) > 0.86 || p.y > 0.58 || p.y < -0.92) return false;
+        if (p.x < xMin || p.x > xMax || p.y > yMax || p.y < yMin) return false;
       }
       return true;
     };

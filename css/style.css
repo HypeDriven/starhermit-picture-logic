@@ -548,7 +548,12 @@ button.card:hover { border-color: var(--accent); }
 @media (max-height: 480px) and (orientation: landscape) {
   #hud { padding-top: calc(4px + var(--safe-top)); padding-bottom: 4px; }
   #tray { padding-top: 4px; padding-bottom: calc(4px + var(--safe-bottom)); }
-  #lesson-banner { bottom: calc(64px + var(--safe-bottom)); }
+  /* lesson instructions dock as a compact left column beside the board */
+  #lesson-banner { left: calc(8px + var(--safe-left)); transform: none; top: calc(52px + var(--safe-top)); bottom: auto; max-width: min(34vw, 260px); padding: 8px 10px; font-size: 0.85em; }
+}
+@media (max-width: 720px) and (orientation: portrait) {
+  /* full-width compact instructions above the tray */
+  #lesson-banner { max-width: calc(100vw - 16px); width: calc(100vw - 16px); padding: 8px 12px; font-size: 0.9em; }
 }
 
 /* --------------------------------------------------------- accessibility */

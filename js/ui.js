@@ -529,10 +529,14 @@ export class UI {
 
   lessonBanner(text, stepLabel) {
     const b = $('lesson-banner');
-    if (text === null) { b.hidden = true; return; }
-    b.hidden = false;
-    $('lesson-step-k').textContent = stepLabel;
-    $('lesson-text').textContent = text;
+    if (text === null) { b.hidden = true; }
+    else {
+      b.hidden = false;
+      $('lesson-step-k').textContent = stepLabel;
+      $('lesson-text').textContent = text;
+    }
+    // the banner's footprint changes the board's safe area
+    if (this.app && this.app.syncSafeInsets) requestAnimationFrame(() => this.app.syncSafeInsets());
   }
 
   // ------------------------------------------------------------ results
