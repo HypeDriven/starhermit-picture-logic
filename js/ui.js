@@ -576,7 +576,7 @@ export class UI {
           <td class="num">${Math.floor(e.elapsedMs / 60000)}:${String(Math.floor(e.elapsedMs / 1000) % 60).padStart(2, '0')}</td>
           <td class="dim small">${escapeHtml(String(e.seed ?? ''))}</td></tr>`).join('')}</tbody></table>`;
     };
-    $('daily-board').innerHTML = table(dailyEntries, 'No validated scores yet today — be the first light.');
+    $('daily-board').innerHTML = table(dailyEntries, 'No global scores yet.');
     $('local-board').innerHTML = table(localEntries, 'Finish any puzzle to post a local best.');
     $('achv-grid').innerHTML = ACHIEVEMENTS.map(a => {
       const got = achievements[a.key];

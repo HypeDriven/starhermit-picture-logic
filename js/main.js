@@ -16,6 +16,7 @@ import { Store, ACHIEVEMENTS } from './store.js';
 import { UI, MODE_INFO, formatMs, escapeHtml } from './ui.js';
 import { AudioEngine } from './audio.js';
 import { hashSeed } from './prng.js';
+import { Platform } from './platform.js';
 
 const BUILD_VERSION = '1.0.0';
 
@@ -33,7 +34,8 @@ class Game {
     this.paused = false;
     this.hiddenAt = null;
     this.timeOffsetMs = 0;      // platform-time sync offset
-    this.hosted = false;
+    this.platform = new Platform();
+    this.ownServer = false;     // local dev server (server.js) answering /api
     this.telemetryQueue = [];
     this.sessionId = `s-${Math.random().toString(36).slice(2, 10)}`;
     this._tickAcc = 0;
@@ -44,12 +46,27 @@ class Game {
     this._remapTarget = null;
     this._layoutCounter = 0;
     this._countdownGen = 0;
+
+    // Cloud mirror: every settings/progress write reschedules the debounced
+    // upload; localStorage stays the offline cache.
+    this.platform.docProvider = () => ({
+      savedAt: new Date().toISOString(),
+      settings: this.store.settings,
+      progress: this.store.progress,
+    });
+    const saveProgress = this.store.saveProgress.bind(this.store);
+    this.store.saveProgress = () => { saveProgress(); this.platform.scheduleCloudSave(); };
+    const saveSettings = this.store.saveSettings.bind(this.store);
+    this.store.saveSettings = () => { saveSettings(); this.platform.scheduleCloudSave(); };
   }
+
+  get hosted() { return this.platform.hosted; }
 
   // ------------------------------------------------------------------ boot
 
   async boot() {
     this.telemetry('start', { v: BUILD_VERSION });
+    this.platform.init();
     this.ui.setThemeVars(themeById(this.store.settings.theme), this.store.settings.palette);
     this.ui.applyAccessibilityClasses(this.store.settings);
     this.ui.holdToMark = this.store.settings.holdToMark;
@@ -63,7 +80,13 @@ class Game {
       this.buildRenderer();
     }
 
-    await this.syncPlatformTime();
+    if (this.platform.hosted) {
+      this.syncPlatformTime(); // round-trip offset for daily boundaries
+      this.platform.onSyncChange = () => this.refreshTitle();
+      this.platform.attachFlush();
+      this.platform.loadProfile().then(() => this.refreshTitle());
+      await this.loadCloudProgress();
+    }
     this.buildSettingsPanel();
     this.wire();
     this.refreshTitle();
@@ -155,18 +178,38 @@ class Game {
   async syncPlatformTime() {
     try {
       const t0 = Date.now();
-      const res = await fetch('/api/v1/time', { signal: AbortSignal.timeout(2500) });
+      const res = await fetch('/api/v1/time', {
+        headers: this.platform.authHeaders(),
+        signal: AbortSignal.timeout(2500),
+      });
       const t1 = Date.now();
       if (!res.ok) return;
       const data = await res.json();
       if (typeof data.epochMs === 'number') {
         this.timeOffsetMs = data.epochMs - Math.round((t0 + t1) / 2);
-        this.hosted = true;
+        this.ownServer = true; // local dev server (server.js) answering
       }
     } catch { /* offline/local play is fully supported */ }
   }
 
   now() { return Date.now() + this.timeOffsetMs; }
+
+  async loadCloudProgress() {
+    try {
+      const remote = await this.platform.cloudLoad();
+      if (!remote) return;
+      // Remote wins on conflict: the cloud slot is the durable copy.
+      this.platform.suspendSave(() => {
+        if (remote.settings) Object.assign(this.store.settings, remote.settings);
+        if (remote.progress) Object.assign(this.store.progress, remote.progress);
+        this.store.saveSettings();
+        this.store.saveProgress();
+      });
+      this.ui.toast('Progress synced from your account.');
+    } catch (err) {
+      console.warn('[cloud] load failed, keeping local progress', err);
+    }
+  }
 
   // ------------------------------------------------------------------ wiring
 
@@ -263,9 +306,13 @@ class Game {
     const todayDone = p.dailies[key];
     document.getElementById('daily-sub').textContent = todayDone
       ? `Today: scored ${todayDone.score.toLocaleString()}` : 'One shared puzzle per UTC day';
-    const name = this.store.settings.profileName;
+    const name = this.platform.nickname || this.store.settings.profileName;
+    const cloudNote = {
+      loading: ' · syncing…', saving: ' · saving…',
+      synced: ' · cloud synced', error: ' · sync failed — kept on this device',
+    }[this.platform.syncState] || '';
     document.getElementById('profile-line').textContent =
-      `${name ? name : 'Guest profile'} · progress saved on this device${this.hosted ? ' · connected' : ' · offline'}`;
+      `${name ? name : 'Guest profile'} · progress saved on this device${this.hosted ? ` · connected${cloudNote}` : ' · offline'}`;
     // Resume affordance for the last safe snapshot.
     let resumeBtn = document.getElementById('btn-resume');
     if (p.lastSnapshot && !resumeBtn) {
@@ -314,23 +361,22 @@ class Game {
   async showScores() {
     const p = this.store.progress;
     const key = utcDateKey(new Date(this.now()));
-    const meName = this.store.settings.profileName || 'You';
+    const meName = this.platform.nickname || this.store.settings.profileName || 'You';
     let dailyEntries = [];
     let note = 'Local board (offline).';
     if (this.hosted) {
       try {
-        const res = await fetch(`/api/v1/leaderboard?board=daily-${key}`, { signal: AbortSignal.timeout(3000) });
-        if (res.ok) {
-          const data = await res.json();
-          dailyEntries = (data.entries || []).map(e => ({ ...e, me: e.name === meName }));
-          note = `Global board · daily-${key} · validated scores only.`;
+        const board = await this.platform.loadLeaderboard(20);
+        if (board) {
+          dailyEntries = board;
+          note = 'Global board · platform-owned, read-only.';
         }
       } catch { /* fall through to local */ }
     }
     if (!dailyEntries.length) {
       const mine = p.dailies[key];
       if (mine) dailyEntries = [{ name: meName, me: true, ...mine }];
-      note = this.hosted ? 'No global scores yet — submit the first light.' : 'Local board (offline). Your daily results appear here.';
+      note = this.hosted ? 'No global scores yet — be the first light.' : 'Local board (offline). Your daily results appear here.';
     }
     const localEntries = p.leaderboard.slice(0, 15).map(e => ({ ...e, me: true, name: e.name || meName }));
     this.ui.showScores({
@@ -789,7 +835,7 @@ class Game {
         progressText = `Daily streak: ${streak} day(s).`;
         if (streak >= 7 && this.grant('daily-7')) unlocked.push('Week of Light');
       } else progressText = 'The daily board keeps your best attempt — try again.';
-      if (won) this.submitRanked(comp); // ranked boards record completions only
+      if (won) this.platform.flushCloudSave(); // ranked result mirrored to the cloud slot
     } else if (s.kind === 'challenge') {
       const prev = p.challenges[s.spec.id];
       if (won && (!prev || comp.total > prev.score)) {
@@ -797,7 +843,7 @@ class Game {
         progressText = 'New personal best for this challenge.';
       } else progressText = won ? 'Challenge complete.' : 'Challenge failed — the constraint held.';
       this.store.saveProgress();
-      if (won) this.submitRanked(comp);
+      if (won) this.platform.flushCloudSave();
     } else if (s.kind === 'practice') {
       p.practicePlays++;
       this.store.saveProgress();
@@ -812,7 +858,7 @@ class Game {
 
     if (won && s.kind !== 'lesson') {
       this.store.addLeaderboard({
-        name: this.store.settings.profileName || 'You',
+        name: this.platform.nickname || this.store.settings.profileName || 'You',
         score: comp.total, mistakes: st.mistakes, elapsedMs: st.elapsedMs,
         mode: s.kind, presetId: s.presetId, seed: st.seed.toString(16),
         ruleset: CONTENT_VERSION, date: new Date(this.now()).toISOString().slice(0, 10),
@@ -869,30 +915,6 @@ class Game {
     this.leaveToTitle();
   }
 
-  async submitRanked(comp) {
-    if (!this.hosted) return;
-    try {
-      await fetch('/api/v1/leaderboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: this.store.settings.profileName || 'Guest',
-          board: this.session.kind === 'daily' ? `daily-${this.session.spec.dateKey}` : this.session.spec.id,
-          score: comp.total, mistakes: this.session.state.mistakes,
-          elapsedMs: this.session.state.elapsedMs,
-          ruleset: CONTENT_VERSION, build: BUILD_VERSION,
-          seed: this.session.state.seed.toString(16),
-          originSeed: (this.session.spec.seed ?? this.session.state.seed).toString(16),
-          rows: this.session.state.rows, cols: this.session.state.cols,
-          density: this.session.spec.density ?? 0.6,
-          assists: { hints: this.session.state.hints, undo: this.session.state.constraints.allowUndo },
-          envelope: this.session.replayEnv,
-        }),
-        signal: AbortSignal.timeout(4000),
-      });
-    } catch { /* board stays local; next visit resubmits opportunistically */ }
-  }
-
   // ------------------------------------------------------------------ settings
 
   openSettings() {
@@ -917,7 +939,7 @@ class Game {
 
     body.innerHTML = `
       <h3 class="set-group">Profile</h3>
-      ${row('Display name', `<input id="set-name" type="text" maxlength="24" value="${escapeHtml(s.profileName)}" placeholder="Guest" style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px">`, 'Shown on boards. Account sign-in is offered by the host when available.')}
+      ${row('Display name', `<input id="set-name" type="text" maxlength="24" value="${escapeHtml(this.platform.nickname || s.profileName)}" placeholder="Guest" ${this.platform.nickname ? 'disabled' : ''} style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px">`, this.platform.nickname ? `Signed in as ${escapeHtml(this.platform.nickname)} — the platform account name is shown.` : 'Shown on boards. Account sign-in is offered by the host when available.')}
       <h3 class="set-group">Visual</h3>
       ${row('Theme', sel('set-theme', THEMES.map(t => [t.id, t.name]), s.theme))}
       ${row('Palette', sel('set-palette', [['standard', 'Standard'], ['cvd', 'Color-vision safe']], s.palette), 'Marks always use shapes as well as color.')}
@@ -941,7 +963,11 @@ class Game {
       <div class="set-row"><label>Replay tutorials<span class="hint">Reset lesson completion.</span></label><button id="set-reset-lessons" class="ghost">Reset</button></div>`;
 
     const $ = (id) => document.getElementById(id);
-    $('set-name').addEventListener('change', () => { s.profileName = $('set-name').value.trim(); this.refreshTitle(); });
+    $('set-name').addEventListener('change', () => {
+      if ($('set-name').disabled) return; // hosted: platform account name wins
+      s.profileName = $('set-name').value.trim();
+      this.refreshTitle();
+    });
     $('set-theme').addEventListener('change', () => {
       s.theme = $('set-theme').value;
       this.ui.setThemeVars(themeById(s.theme), s.palette);
@@ -1121,7 +1147,9 @@ class Game {
   }
 
   async flushTelemetry() {
-    if (!this.hosted || !this.telemetryQueue.length) return;
+    // The platform has no client-reachable telemetry endpoint; the funnel
+    // intake below is this repo's own dev server (server.js) only.
+    if (this.hosted || !this.ownServer || !this.telemetryQueue.length) return;
     const events = this.telemetryQueue.splice(0);
     try {
       await fetch('/api/v1/telemetry', {
