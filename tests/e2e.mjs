@@ -7,7 +7,9 @@
  *   with score breakdown + persisted progress. Also exercises pause/resume,
  *   the Hint button and the Undo button through the visible controls.
  * A second pass runs the load → practice → tap-a-few-cells flow on a
- * mobile touch viewport.
+ * mobile touch viewport. A graphics pass (desktop + mobile) drives
+ * Settings → Graphics: preset Low → Ultra, a category override, a keyboard
+ * toggle, persistence across reload, and zero console errors/warnings.
  *
  * The game exposes a debug/validation handle `window.__pictureLogic`
  * (main.js: `window.__pictureLogic = game;`). The test reads that handle
@@ -296,6 +298,99 @@ async function runPass(browser, name, ctxOpts, { full }) {
   console.log(`ok - ${name}: no page errors`);
 }
 
+// ---------- graphics settings pass ----------
+// Through the visible Settings → Graphics controls: Auto resolves to Low on the
+// software GPU, switch Low → Ultra, override one category, confirm it is applied
+// (body data attribute + renderer state) and survives a reload. Ultra is then
+// rendered in play. Zero console errors AND warnings.
+async function graphicsPass(browser, name, ctxOpts) {
+  const errors = [];
+  const context = await browser.newContext(ctxOpts);
+  const page = await context.newPage();
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (!['error', 'warning'].includes(m.type()) || browserNoise.test(m.text())) return;
+    const url = m.location()?.url || '';
+    if (/Failed to load resource/.test(m.text()) && /\/api\/|\/favicon/.test(url)) return;
+    errors.push(`console.${m.type()}: ${m.text()}`);
+  });
+  const touch = !!ctxOpts.hasTouch;
+  const press = (sel) => (touch ? page.tap(sel) : page.click(sel));
+  const bodyAttr = (k) => page.evaluate((key) => document.body.dataset[key], k);
+  const rendererGfx = () => page.evaluate(() => {
+    const r = window.__pictureLogic?.renderer;
+    return r ? { preset: r.gfx.preset, bloom: r.gfx.bloom, shadows: r.renderer.shadowMap.enabled } : null;
+  });
+  const openGraphics = async () => {
+    await press('#btn-settings');
+    await page.waitForSelector('#overlay-settings.active');
+    await page.locator('#gfx-preset').scrollIntoViewIfNeeded();
+  };
+  try {
+    await page.goto(BASE, { waitUntil: 'load' });
+    await page.waitForFunction(() => window.__pictureLogic?.phase === 'title' && !!window.__pictureLogic.renderer);
+    if (await bodyAttr('gfxPreset') !== 'low' || await bodyAttr('gfxChoice') !== 'auto') {
+      throw new Error(`Auto should resolve to Low on the software GPU, got ${await bodyAttr('gfxChoice')}/${await bodyAttr('gfxPreset')}`);
+    }
+    await openGraphics();
+    const autoLabel = await page.locator('#gfx-preset option[value="auto"]').textContent();
+    if (!/Low/.test(autoLabel)) throw new Error(`auto option label missing detected tier: "${autoLabel}"`);
+    const box = await page.locator('#gfx-preset').boundingBox();
+    const vp = page.viewportSize();
+    if (!box || box.x < 0 || box.x + box.width > vp.width + 1) throw new Error('graphics quality select is cut off: ' + JSON.stringify(box));
+    const hScroll = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    if (hScroll) throw new Error('settings panel causes horizontal scroll');
+
+    await page.selectOption('#gfx-preset', 'low');
+    await page.waitForFunction(() => document.body.dataset.gfxChoice === 'low');
+    if (!/no shadows/.test(await page.textContent('#gfx-summary'))) throw new Error('summary does not reflect Low');
+    await page.selectOption('#gfx-preset', 'ultra');
+    await page.waitForFunction(() => document.body.dataset.gfxPreset === 'ultra');
+    let rg = await rendererGfx();
+    if (!rg || rg.preset !== 'ultra' || !rg.shadows || rg.bloom !== 'on') throw new Error('Ultra not applied to renderer: ' + JSON.stringify(rg));
+    ok(`${name}: graphics preset Low → Ultra applied live ("${(await page.textContent('#gfx-summary')).trim()}")`);
+
+    // Per-category override through the visible select.
+    await page.locator('#gfx-cat-bloom').scrollIntoViewIfNeeded();
+    await page.selectOption('#gfx-cat-bloom', 'off');
+    await page.waitForFunction(() => window.__pictureLogic?.renderer?.gfx.bloom === 'off');
+    // Keyboard: toggle "Show frame rate" with Space.
+    await page.locator('#gfx-fps').focus();
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => { const el = document.getElementById('fps-meter'); return el && !el.hidden; });
+    ok(`${name}: bloom override and frame-rate toggle (keyboard) applied`);
+    await press('#settings-close');
+    await page.waitForFunction(() => !document.getElementById('overlay-settings').classList.contains('active'));
+
+    // Render Ultra in play for a moment (post chain, shadows, IBL).
+    await startPractice(page);
+    await waitPlayActive(page);
+    await page.waitForTimeout(1200);
+    const post = await page.evaluate(() => ({ composer: !!window.__pictureLogic.renderer.composer, failed: window.__pictureLogic.renderer.postFailed }));
+    if (!post.composer || post.failed) throw new Error('Ultra post-processing chain not running: ' + JSON.stringify(post));
+    await page.screenshot({ path: SHOT('gfx-ultra', name) });
+
+    // Persistence across reload.
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => window.__pictureLogic?.phase === 'title' && !!window.__pictureLogic.renderer);
+    if (await bodyAttr('gfxPreset') !== 'ultra') throw new Error('preset did not survive reload');
+    rg = await rendererGfx();
+    if (rg.bloom !== 'off') throw new Error('override did not survive reload');
+    await openGraphics();
+    if (await page.inputValue('#gfx-cat-bloom') !== 'off') throw new Error('override select not restored');
+    if (await page.inputValue('#gfx-preset') !== 'ultra') throw new Error('preset select not restored');
+    // Choosing a preset clears overrides.
+    await page.selectOption('#gfx-preset', 'auto');
+    await page.waitForFunction(() => document.body.dataset.gfxChoice === 'auto');
+    if (await page.inputValue('#gfx-cat-bloom') !== 'preset') throw new Error('preset choice did not clear the override');
+    ok(`${name}: graphics settings persist across reload; choosing a preset clears overrides`);
+  } finally {
+    await context.close();
+  }
+  if (errors.length) throw new Error(`${name} graphics pass had console output:\n  ${errors.join('\n  ')}`);
+  console.log(`ok - ${name}: graphics pass, no console errors or warnings`);
+}
+
 // ---------- main ----------
 let browser = null;
 try {
@@ -307,6 +402,8 @@ try {
   await runPass(browser, 'desktop', { viewport: { width: 1280, height: 800 } }, { full: true });
   await runPass(browser, 'mobile',
     { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, { full: false });
+  await graphicsPass(browser, 'desktop', { viewport: { width: 1280, height: 800 } });
+  await graphicsPass(browser, 'mobile', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   console.log('\nE2E PASS — picture-logic, desktop + mobile, no page errors');
 } catch (e) {
   failures++;

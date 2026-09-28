@@ -12,7 +12,9 @@ import {
   CONTENT_VERSION, THEMES, themeById, JOURNEY_STAGES, dailySpec, utcDateKey,
   challengeSpecs, utcWeekKey, PRACTICE_PRESETS, LESSONS, buildPuzzle, puzzleHash,
 } from './content.js';
-import { Store, ACHIEVEMENTS } from './store.js';
+import { Store, ACHIEVEMENTS, migrateGraphics } from './store.js';
+import { PRESETS, CATEGORIES, autoPreset, resolve, choosePreset, presetTier, describe } from './gfx.js';
+import { gfxStrings } from './gfx-strings.js';
 import { UI, MODE_INFO, formatMs, escapeHtml } from './ui.js';
 import { AudioEngine } from './audio.js';
 import { hashSeed } from './prng.js';
@@ -41,8 +43,9 @@ class Game {
     this.sessionId = `s-${Math.random().toString(36).slice(2, 10)}`;
     this._tickAcc = 0;
     this._lastFrame = 0;
-    this._fps = { acc: 0, n: 0, avg: 60, badTime: 0 };
-    this._renderScale = 1;
+    this.gpu = '';               // unmasked GPU renderer string, when exposed
+    this.gfxAuto = 'balanced';   // Auto preset for this device
+    this.gfxText = gfxStrings(navigator.language);
     this._gamepad = { prev: [], axisAt: 0 };
     this._remapTarget = null;
     this._layoutCounter = 0;
@@ -74,6 +77,7 @@ class Game {
     document.getElementById('title-version').textContent = `v${BUILD_VERSION} · content v${CONTENT_VERSION}`;
 
     this.flat = !this.detectWebGL();
+    this.applyGraphics(false);
     if (this.flat) {
       document.getElementById('playfield').classList.add('flat');
       this.ui.toast('3D is unavailable in this browser — playing the accessible flat board.', '');
@@ -115,22 +119,60 @@ class Game {
     requestAnimationFrame((t) => { this._lastFrame = t; this.loop(t); });
   }
 
+  // Probe WebGL once; the unmasked renderer string picks the Auto graphics preset.
   detectWebGL() {
     try {
       const c = document.createElement('canvas');
-      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+      const gl = c.getContext('webgl2') || c.getContext('webgl');
+      if (!gl) return false;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      this.gpu = String((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || '');
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return true;
     } catch { return false; }
   }
 
-  buildRenderer() {
+  isMobileDevice() {
+    return matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 760;
+  }
+
+  resolveGraphics() {
+    this.gfxAuto = autoPreset(this.gpu, this.isMobileDevice());
+    return resolve(this.store.settings.graphics, this.gfxAuto);
+  }
+
+  // Apply graphics settings live: body data attributes (DOM effects + tests),
+  // then the renderer — rebuilt only when the canvas MSAA context flag changes.
+  applyGraphics(live = true) {
+    const g = this.resolveGraphics();
+    this.gfx = g;
+    const b = document.body.dataset;
+    b.gfxPreset = g.preset;
+    b.gfxChoice = g.auto ? 'auto' : g.preset;
+    b.gfxDetail = g.detail;
+    b.gfxBackground = g.background;
     const canvas = document.getElementById('gl');
-    if (this.renderer) this.renderer.dispose();
+    if (canvas) canvas.dataset.gfxPreset = g.preset;
+    if (!live || this.flat || !this.renderer) return;
+    if (this.renderer.canvasMsaa !== g.canvasMsaa) this.buildRenderer(true);
+    else this.renderer.setGraphics(g);
+  }
+
+  buildRenderer(freshCanvas = false) {
+    let canvas = document.getElementById('gl');
+    if (this.renderer) { this.renderer.dispose(); this.renderer = null; }
+    if (freshCanvas) {
+      // Context attributes (antialias) are fixed per canvas: swap in a new one.
+      const next = canvas.cloneNode(false);
+      canvas.replaceWith(next);
+      canvas = next;
+    }
     // Dynamic import keeps the flat fallback lightweight.
     import('./render3d.js').then(({ BoardRenderer }) => {
       if (this.flat) return;
-      const q = this.resolveQuality();
       this.renderer = new BoardRenderer(canvas, {
-        quality: q,
+        gfx: this.resolveGraphics(),
+        gpu: this.gpu,
         reducedMotion: this.store.settings.reducedMotion,
         theme: themeById(this.store.settings.theme),
         onCellHover: (cell) => {
@@ -149,19 +191,10 @@ class Game {
         this.renderer.setBoard(this.session.state.rows, this.session.state.cols, this.session.state.seed);
         this.renderer.syncState(this.session.state.grid, this.session.state.rows, this.session.state.cols);
       }
-    }).catch(err => {
-      console.warn('[render] failed to start 3D, using flat board', err);
+    }).catch(() => {
       this.flat = true;
       document.getElementById('playfield').classList.add('flat');
     });
-  }
-
-  resolveQuality() {
-    const q = this.store.settings.quality;
-    if (q !== 'auto') return q;
-    const coarse = matchMedia('(pointer: coarse)').matches;
-    const small = Math.min(screen.width, screen.height) < 760;
-    return (coarse || small) ? 'low' : 'medium';
   }
 
   onContextLost() {
@@ -201,7 +234,7 @@ class Game {
       if (!remote) return;
       // Remote wins on conflict: the cloud slot is the durable copy.
       this.platform.suspendSave(() => {
-        if (remote.settings) Object.assign(this.store.settings, remote.settings);
+        if (remote.settings) { Object.assign(this.store.settings, remote.settings); migrateGraphics(this.store.settings); this.applyGraphics(); }
         if (remote.progress) Object.assign(this.store.progress, remote.progress);
         this.store.saveSettings();
         this.store.saveProgress();
@@ -921,9 +954,12 @@ class Game {
   openSettings() {
     this.buildSettingsPanel();
     this.ui.overlay('overlay-settings', true);
+    clearInterval(this._gfxTimer);
+    this._gfxTimer = setInterval(() => this.refreshGraphicsSummary(), 1000);
   }
 
   closeSettings() {
+    clearInterval(this._gfxTimer);
     this.ui.overlay('overlay-settings', false);
     this.store.saveSettings();
     this.telemetry('settings-change', {});
@@ -944,10 +980,10 @@ class Game {
       <h3 class="set-group">Visual</h3>
       ${row('Theme', sel('set-theme', THEMES.map(t => [t.id, t.name]), s.theme))}
       ${row('Palette', sel('set-palette', [['standard', 'Standard'], ['cvd', 'Color-vision safe']], s.palette), 'Marks always use shapes as well as color.')}
-      ${row('Graphics tier', sel('set-quality', [['auto', 'Auto'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], s.quality), 'Applies fully on the next puzzle.')}
       ${row('Reduced motion', chk('set-motion', s.reducedMotion), 'No camera swoops, shake or large scaling.')}
       ${row('High contrast', chk('set-contrast', s.highContrast))}
       ${row('Larger text', chk('set-text', s.largeText))}
+      <div id="gfx-section"></div>
       <h3 class="set-group">Audio</h3>
       ${row('Mute all', chk('set-mute', s.muted))}
       ${row('Music', rng('set-vol-music', s.volumes.music))}
@@ -975,11 +1011,6 @@ class Game {
       this.renderer?._applyTheme(themeById(s.theme));
     });
     $('set-palette').addEventListener('change', () => { s.palette = $('set-palette').value; this.ui.setThemeVars(themeById(s.theme), s.palette); });
-    $('set-quality').addEventListener('change', () => {
-      s.quality = $('set-quality').value;
-      this.renderer?.setQuality(this.resolveQuality());
-      this.onResize();
-    });
     $('set-motion').addEventListener('change', () => { s.reducedMotion = $('set-motion').checked; this.ui.applyAccessibilityClasses(s); this.renderer?.setReducedMotion(s.reducedMotion); });
     $('set-contrast').addEventListener('change', () => { s.highContrast = $('set-contrast').checked; this.ui.applyAccessibilityClasses(s); });
     $('set-text').addEventListener('change', () => { s.largeText = $('set-text').checked; this.ui.applyAccessibilityClasses(s); });
@@ -1000,6 +1031,92 @@ class Game {
       this.ui.toast('Lessons reset — replay them from Learn.');
     });
     this.buildGamepadMap();
+    this.buildGraphicsSection();
+  }
+
+  // Graphics: quality preset, render scale, per-category overrides, toggles.
+  buildGraphicsSection() {
+    const host = document.getElementById('gfx-section');
+    if (!host) return;
+    const T = this.gfxText;
+    const saved = this.store.settings.graphics;
+    const g = this.resolveGraphics();
+    const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+    const row = (id, label, control, hint = '') => `
+      <div class="set-row"><label for="${id}">${escapeHtml(label)}${hint ? `<span class="hint">${escapeHtml(hint)}</span>` : ''}</label>${control}</div>`;
+    const presetSel = `<select id="gfx-preset" data-gfx="preset">${
+      opt('auto', T.auto.replace('{tier}', T.tier[this.gfxAuto]), PRESETS.includes(saved.preset) ? saved.preset : 'auto')
+    }${PRESETS.map(p => opt(p, T.tier[p], saved.preset)).join('')}</select>`;
+    const pct = Math.round((Number(saved.render_scale) || 1) * 100);
+    const scale = `<span class="gfx-scale"><input type="range" id="gfx-scale" data-gfx="render_scale" min="50" max="200" step="5" value="${pct}" aria-valuetext="${pct}%"><output id="gfx-scale-val" for="gfx-scale">${pct}%</output></span>`;
+    const cats = Object.entries(CATEGORIES).map(([cat, tiers]) => {
+      const cur = tiers.includes(saved[cat]) ? saved[cat] : 'preset';
+      const control = `<select id="gfx-cat-${cat}" data-gfx-cat="${cat}">${
+        opt('preset', T.fromPreset.replace('{tier}', T.val[presetTier(g.preset, cat)]), cur)
+      }${tiers.map(t => opt(t, T.val[t], cur)).join('')}</select>`;
+      return row(`gfx-cat-${cat}`, T.cat[cat], control);
+    }).join('');
+    const chk = (id, key, val) => `<input type="checkbox" id="${id}" data-gfx="${key}" role="switch" ${val ? 'checked' : ''} aria-checked="${!!val}">`;
+    host.innerHTML = `
+      <h3 class="set-group" id="gfx-h">${escapeHtml(T.section)}</h3>
+      <div class="gfx-panel" role="group" aria-labelledby="gfx-h">
+        ${row('gfx-preset', T.quality, presetSel, T.qualityHint)}
+        ${row('gfx-scale', T.renderScale, scale, T.renderScaleHint)}
+        ${cats}
+        ${row('gfx-adaptive', T.adaptive, chk('gfx-adaptive', 'adaptive', g.adaptive), T.adaptiveHint)}
+        ${row('gfx-fps', T.showFps, chk('gfx-fps', 'show_fps', g.showFps))}
+        <p class="gfx-summary small dim" id="gfx-summary" aria-live="polite"></p>
+        <p class="gfx-note small" id="gfx-note" hidden></p>
+      </div>`;
+
+    const $ = (id) => document.getElementById(id);
+    const commit = (rebuild) => {
+      this.applyGraphics();
+      this.store.saveSettings();
+      if (rebuild) this.buildGraphicsSection();
+      else this.refreshGraphicsSummary();
+    };
+    $('gfx-preset').addEventListener('change', () => {
+      this.store.settings.graphics = choosePreset(this.store.settings.graphics, $('gfx-preset').value);
+      commit(true);
+      $('gfx-preset').focus();
+    });
+    $('gfx-scale').addEventListener('input', () => {
+      const v = parseInt($('gfx-scale').value, 10);
+      $('gfx-scale-val').textContent = `${v}%`;
+      $('gfx-scale').setAttribute('aria-valuetext', `${v}%`);
+      this.store.settings.graphics.render_scale = v / 100;
+      commit(false);
+    });
+    host.querySelectorAll('[data-gfx-cat]').forEach(sel => sel.addEventListener('change', () => {
+      const gs = this.store.settings.graphics;
+      if (sel.value === 'preset') delete gs[sel.dataset.gfxCat];
+      else gs[sel.dataset.gfxCat] = sel.value;
+      commit(false);
+    }));
+    for (const id of ['gfx-adaptive', 'gfx-fps']) {
+      $(id).addEventListener('change', () => {
+        this.store.settings.graphics[$(id).dataset.gfx] = $(id).checked;
+        $(id).setAttribute('aria-checked', String($(id).checked));
+        commit(false);
+      });
+    }
+    this.refreshGraphicsSummary();
+  }
+
+  // "GPU name · cost summary · W×H px", plus a note when post-processing failed.
+  refreshGraphicsSummary() {
+    const el = document.getElementById('gfx-summary');
+    if (!el) return;
+    const T = this.gfxText;
+    const info = this.renderer?.graphicsInfo();
+    const g = this.gfx || this.resolveGraphics();
+    const px = info && info.pixels[0] ? info.pixels : null;
+    el.textContent = [this.gpu || T.unknownGpu, describe(g, px, T.words)].join(' · ');
+    const note = document.getElementById('gfx-note');
+    const msg = this.flat ? T.flat : info?.postFailed ? T.postFailed : '';
+    note.hidden = !msg;
+    note.textContent = msg;
   }
 
   buildGamepadMap() {
@@ -1071,28 +1188,6 @@ class Game {
     requestAnimationFrame((tt) => this.loop(tt));
     const dt = Math.min(0.1, (t - this._lastFrame) / 1000);
     this._lastFrame = t;
-
-    // FPS monitor: lower render scale before touching simulation rate.
-    if (dt > 0) {
-      const f = this._fps;
-      f.acc += 1 / dt; f.n++;
-      if (f.n >= 40) {
-        f.avg = f.acc / f.n;
-        f.acc = 0; f.n = 0;
-        if (f.avg < 45 && this.renderer) {
-          f.badTime += 1;
-          if (f.badTime >= 2 && this._renderScale > 0.55) {
-            this._renderScale = Math.max(0.55, this._renderScale - 0.15);
-            this.renderer.setRenderScale(this._renderScale);
-            f.badTime = 0;
-          }
-        } else if (f.avg > 57 && this._renderScale < 1) {
-          this._renderScale = Math.min(1, this._renderScale + 0.1);
-          this.renderer.setRenderScale(this._renderScale);
-          f.badTime = 0;
-        } else f.badTime = 0;
-      }
-    }
 
     this.pollGamepad();
 

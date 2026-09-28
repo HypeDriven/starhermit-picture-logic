@@ -4,6 +4,7 @@
 'use strict';
 
 import { fnv1a } from './prng.js';
+import { DEFAULT_GRAPHICS } from './gfx.js';
 
 const SETTINGS_KEY = 'picture-logic.settings.v1';
 const PROGRESS_KEY = 'picture-logic.progress.v1';
@@ -16,7 +17,7 @@ function checksum(payload) {
 export const DEFAULT_SETTINGS = {
   theme: 'dawn-garden',
   palette: 'standard',       // 'standard' | 'cvd'
-  quality: 'auto',           // 'auto' | 'low' | 'medium' | 'high'
+  graphics: { ...DEFAULT_GRAPHICS }, // gfx.js model: preset, render_scale, adaptive, show_fps, per-category overrides
   reducedMotion: false,
   highContrast: false,
   largeText: false,
@@ -81,9 +82,21 @@ function writeDoc(key, data) {
   }
 }
 
+// The old single "graphics tier" (auto/low/medium/high) becomes a gfx.js preset.
+export function migrateGraphics(settings) {
+  if (!settings.graphics || typeof settings.graphics !== 'object') settings.graphics = { ...DEFAULT_GRAPHICS };
+  if ('quality' in settings) {
+    const map = { low: 'low', medium: 'balanced', high: 'high' };
+    if (settings.graphics.preset === 'auto' && map[settings.quality]) settings.graphics.preset = map[settings.quality];
+    delete settings.quality;
+  }
+  return settings;
+}
+
 export class Store {
   constructor() {
     this.settings = readDoc(SETTINGS_KEY, DEFAULT_SETTINGS);
+    migrateGraphics(this.settings);
     this.progress = readDoc(PROGRESS_KEY, DEFAULT_PROGRESS);
   }
   saveSettings() { writeDoc(SETTINGS_KEY, this.settings); }
