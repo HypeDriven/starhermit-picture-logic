@@ -20,6 +20,7 @@ export const MODE_INFO = [
 
 export class UI {
   constructor() {
+    this.bindings = structuredClone(FALLBACK_BINDINGS); // keyboard action -> KeyboardEvent.code[]
     this.screens = [...document.querySelectorAll('.screen')];
     this.current = 'screen-title';
     this.focusMemory = new Map();
@@ -211,15 +212,16 @@ export class UI {
 
   buildHelpControls(gamepadMap) {
     const grid = $('controls-grid');
+    const keys = (...actions) => actions.map((a) => (this.bindings[a] || []).map(keyLabel).map((k) => `<kbd>${k}</kbd>`).join(' / ')).join(' ');
     const rows = [
-      ['Move cursor', 'Arrow keys / D-pad / left stick'],
-      ['Fill cell', `<kbd>Enter</kbd> / <kbd>Space</kbd> / gamepad button ${gamepadMap.fill}`],
-      ['Mark ✕', `<kbd>X</kbd> / gamepad button ${gamepadMap.mark}`],
-      ['Clear mark', '<kbd>C</kbd> or <kbd>Backspace</kbd>'],
-      ['Hint', `<kbd>H</kbd> / gamepad button ${gamepadMap.hint}`],
-      ['Undo', `<kbd>U</kbd> / gamepad button ${gamepadMap.undo}`],
-      ['Pause', `<kbd>P</kbd> or <kbd>Esc</kbd> / gamepad button ${gamepadMap.pause}`],
-      ['Reset camera', `<kbd>R</kbd> / gamepad button ${gamepadMap.camera}`],
+      ['Move cursor', `${keys('cursor_up', 'cursor_left', 'cursor_down', 'cursor_right')} / D-pad / left stick`],
+      ['Fill cell', `${keys('fill')} / gamepad button ${gamepadMap.fill}`],
+      ['Mark ✕', `${keys('mark')} / gamepad button ${gamepadMap.mark}`],
+      ['Clear mark', keys('clear')],
+      ['Hint', `${keys('hint')} / gamepad button ${gamepadMap.hint}`],
+      ['Undo', `${keys('undo')} / gamepad button ${gamepadMap.undo}`],
+      ['Pause', `${keys('pause')} / gamepad button ${gamepadMap.pause}`],
+      ['Reset camera', `${keys('camera')} / gamepad button ${gamepadMap.camera}`],
     ];
     grid.innerHTML = rows.map(([k, v]) => `<div class="help-card"><h3>${k}</h3><p>${v}</p></div>`).join('');
   }
@@ -597,8 +599,9 @@ export class UI {
       if (e.key === 'Escape' && this.current === 'screen-results') { /* results handles its own nav */ }
       return;
     }
+    const action = actionFor(this.bindings, e.code);
     if ($('overlay-pause').classList.contains('active') || $('overlay-settings').classList.contains('active')) {
-      if (e.key === 'Escape') this.onPauseToggle?.();
+      if (e.key === 'Escape' || action === 'pause') this.onPauseToggle?.();
       return;
     }
     const { r, c } = this.cursor;
@@ -607,25 +610,41 @@ export class UI {
       this.setCursor((r + dr + rows) % rows, (c + dc + cols) % cols);
       e.preventDefault();
     };
-    switch (e.key) {
-      case 'ArrowUp': move(-1, 0); break;
-      case 'ArrowDown': move(1, 0); break;
-      case 'ArrowLeft': move(0, -1); break;
-      case 'ArrowRight': move(0, 1); break;
-      case 'Enter': case ' ': case 'z': case 'Z':
-        this.onAction({ type: 'fill', r, c }); e.preventDefault(); break;
-      case 'x': case 'X': case 'm': case 'M':
-        this.onAction({ type: 'mark', r, c }); e.preventDefault(); break;
-      case 'c': case 'C': case 'Backspace': case 'Delete':
-        this.onAction({ type: 'clear', r, c }); e.preventDefault(); break;
-      case 'h': case 'H': this.onAction({ type: 'hint' }); e.preventDefault(); break;
-      case 'u': case 'U': this.onUndo?.(); e.preventDefault(); break;
-      case 'p': case 'P': this.onPauseToggle?.(); e.preventDefault(); break;
-      case 'Escape': this.onPauseToggle?.(); e.preventDefault(); break;
-      case 'r': case 'R': this.onCameraReset?.(); e.preventDefault(); break;
-      case 'Tab': break; // allow normal tab navigation out of the grid
+    switch (action) {
+      case 'cursor_up': move(-1, 0); break;
+      case 'cursor_down': move(1, 0); break;
+      case 'cursor_left': move(0, -1); break;
+      case 'cursor_right': move(0, 1); break;
+      case 'fill': this.onAction({ type: 'fill', r, c }); e.preventDefault(); break;
+      case 'mark': this.onAction({ type: 'mark', r, c }); e.preventDefault(); break;
+      case 'clear': this.onAction({ type: 'clear', r, c }); e.preventDefault(); break;
+      case 'hint': this.onAction({ type: 'hint' }); e.preventDefault(); break;
+      case 'undo': this.onUndo?.(); e.preventDefault(); break;
+      case 'pause': this.onPauseToggle?.(); e.preventDefault(); break;
+      case 'camera': this.onCameraReset?.(); e.preventDefault(); break;
+      default: break; // Tab etc. keep their normal behaviour
     }
   }
+}
+
+// Keyboard actions resolved from KeyboardEvent.code via the bindings map.
+// Defaults are declared as control.* in starhermit.txt; the game replaces
+// ui.bindings with the player's StarHermit overrides when signed in.
+export const FALLBACK_BINDINGS = {
+  cursor_up: ['ArrowUp'], cursor_down: ['ArrowDown'], cursor_left: ['ArrowLeft'], cursor_right: ['ArrowRight'],
+  fill: ['Enter', 'NumpadEnter', 'Space', 'KeyZ'], mark: ['KeyX', 'KeyM'], clear: ['KeyC', 'Backspace', 'Delete'],
+  hint: ['KeyH'], undo: ['KeyU'], pause: ['KeyP', 'Escape'], camera: ['KeyR'],
+};
+function actionFor(bindings, code) {
+  for (const [action, codes] of Object.entries(bindings)) if (codes.includes(code)) return action;
+  return null;
+}
+function keyLabel(code) {
+  const named = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', Space: 'Space', NumpadEnter: 'Num Enter', Backspace: 'Backspace', Delete: 'Delete' };
+  if (named[code]) return named[code];
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  return String(code).replace(/[^\w ]/g, '');
 }
 
 export function escapeHtml(s) {

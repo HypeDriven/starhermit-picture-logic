@@ -12,13 +12,15 @@ import {
   CONTENT_VERSION, THEMES, themeById, JOURNEY_STAGES, dailySpec, utcDateKey,
   challengeSpecs, utcWeekKey, PRACTICE_PRESETS, LESSONS, buildPuzzle, puzzleHash,
 } from './content.js';
-import { Store, ACHIEVEMENTS, migrateGraphics } from './store.js';
+import { Store, ACHIEVEMENTS, migrateGraphics, DEFAULT_SETTINGS } from './store.js';
 import { PRESETS, CATEGORIES, autoPreset, resolve, choosePreset, presetTier, describe } from './gfx.js';
 import { gfxStrings } from './gfx-strings.js';
-import { UI, MODE_INFO, formatMs, escapeHtml } from './ui.js';
+import { UI, MODE_INFO, formatMs, escapeHtml, FALLBACK_BINDINGS as DEFAULT_BINDINGS } from './ui.js';
 import { AudioEngine } from './audio.js';
 import { hashSeed } from './prng.js';
 import { Platform } from './platform.js';
+import { currentPlatformStrings } from './platform-i18n.js';
+
 
 const BUILD_VERSION = '1.0.0';
 
@@ -61,7 +63,7 @@ class Game {
     const saveProgress = this.store.saveProgress.bind(this.store);
     this.store.saveProgress = () => { saveProgress(); this.platform.scheduleCloudSave(); };
     const saveSettings = this.store.saveSettings.bind(this.store);
-    this.store.saveSettings = () => { saveSettings(); this.platform.scheduleCloudSave(); };
+    this.store.saveSettings = () => { saveSettings(); this.platform.scheduleCloudSave(); this.platform.syncSettings(this.store.settings); };
   }
 
   get hosted() { return this.platform.hosted; }
@@ -91,7 +93,9 @@ class Game {
       this.platform.attachFlush();
       this.platform.loadProfile().then(() => this.refreshTitle());
       await this.loadCloudProgress();
+      await this.loadRemoteSettings();
     }
+    this.wirePlatform();
     this.buildSettingsPanel();
     this.wire();
     this.refreshTitle();
@@ -245,6 +249,59 @@ class Game {
     }
   }
 
+  // Platform settings KV wins over local values for known preference keys.
+  async loadRemoteSettings() {
+    const remote = await this.platform.loadRemoteSettings();
+    const s = this.store.settings;
+    let changed = false;
+    this.platform.suspendSave(() => {
+      for (const [k, v] of Object.entries(remote)) {
+        if (!(k in DEFAULT_SETTINGS) || v == null || typeof v !== typeof DEFAULT_SETTINGS[k]) continue;
+        if (JSON.stringify(s[k]) === JSON.stringify(v)) continue;
+        s[k] = structuredClone(v);
+        changed = true;
+      }
+      if (changed) {
+        migrateGraphics(s);
+        this.applyGraphics();
+        this.ui.setThemeVars(themeById(s.theme), s.palette);
+        this.ui.applyAccessibilityClasses(s);
+        this.ui.holdToMark = s.holdToMark;
+        this.store.saveSettings();
+      }
+    });
+    this.platform.syncSettings(s);
+  }
+
+  // StarHermit account buttons (sign-in on the hosted domain without a token,
+  // invite when signed in), keyboard bindings and sign-out handling.
+  wirePlatform() {
+    const t = currentPlatformStrings();
+    const signIn = document.getElementById('btn-signin');
+    const invite = document.getElementById('btn-invite');
+    signIn.textContent = t.signIn;
+    invite.textContent = t.invite;
+    signIn.addEventListener('click', () => this.platform.signIn());
+    invite.addEventListener('click', async () => {
+      const link = this.platform.inviteLink();
+      if (!link) return;
+      try {
+        await navigator.clipboard.writeText(link);
+        this.ui.toast(t.inviteCopied);
+      } catch {
+        this.ui.toast(t.inviteFailed.replace('{link}', link));
+      }
+    });
+    this.platform.onAuthChange = ({ signedIn }) => {
+      if (!signedIn) this.ui.toast(t.signedOut);
+      this.refreshTitle();
+    };
+    this.platform.loadBindings(DEFAULT_BINDINGS).then((b) => {
+      this.ui.bindings = b;
+      this.ui.buildHelpControls(this.store.settings.gamepadMap);
+    });
+  }
+
   // ------------------------------------------------------------------ wiring
 
   wire() {
@@ -345,6 +402,8 @@ class Game {
       loading: ' · syncing…', saving: ' · saving…',
       synced: ' · cloud synced', error: ' · sync failed — kept on this device',
     }[this.platform.syncState] || '';
+    document.getElementById('btn-signin').hidden = !this.platform.canSignIn();
+    document.getElementById('btn-invite').hidden = !this.platform.inviteLink();
     document.getElementById('profile-line').textContent =
       `${name ? name : 'Guest profile'} · progress saved on this device${this.hosted ? ` · connected${cloudNote}` : ' · offline'}`;
     // Resume affordance for the last safe snapshot.
