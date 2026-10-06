@@ -609,10 +609,31 @@ body.reduced-motion #screen-title::before { animation: none !important; }
 
 /* Landscape mobile: keep a narrow status rail, 44px targets preserved. */
 @media (max-height: 480px) and (orientation: landscape) {
-  #hud { padding-top: calc(4px + var(--safe-top)); padding-bottom: 4px; }
-  #tray { padding-top: 4px; padding-bottom: calc(4px + var(--safe-bottom)); }
-  /* lesson instructions dock as a compact left column beside the board */
-  #lesson-banner { left: calc(8px + var(--safe-left)); transform: none; top: calc(52px + var(--safe-top)); bottom: auto; max-width: min(calc(34vw / var(--ui-scale, 1)), 260px); padding: 8px 10px; font-size: 0.85em; }
+  /* The board needs the full height: a 15×15 puzzle under a top HUD and a bottom
+     tray got ~9 px rows and its row clues ran together. The HUD becomes a
+     narrow status rail on the left and the tray a column on the right, so the
+     playfield spans the whole screen height. */
+  #screen-play.active { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); }
+  #hud { grid-column: 1; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; width: 132px;
+    padding: calc(6px + var(--safe-top)) 6px calc(6px + var(--safe-bottom)) calc(6px + var(--safe-left)); overflow-y: auto; }
+  #hud .hud-item { padding: 3px 8px; font-size: 0.85em; }
+  #hud-objective { display: block; max-width: none; white-space: normal; font-size: 0.92em; line-height: 1.25; }
+  #hud .spacer { flex: 1; }
+  #btn-pause { padding: 6px 8px; }
+  #playfield { grid-column: 2; }
+  #tray { grid-column: 3; flex-direction: column; flex-wrap: nowrap; justify-content: center; gap: 6px;
+    padding: calc(6px + var(--safe-top)) calc(6px + var(--safe-right)) calc(6px + var(--safe-bottom)) 6px; }
+  #tray .seg { flex-direction: column; }
+  #tray .seg button { min-width: 0; }
+  #tray .sep { display: none; }
+  #tray > button, #tray .seg button { width: 92px; }
+  #hud, #playfield, #tray { grid-row: 1; }
+  body.left-handed #tray { flex-direction: column; grid-column: 1; } /* tray under the left thumb */
+  body.left-handed #hud { grid-column: 3; padding-left: 6px; padding-right: calc(6px + var(--safe-right)); }
+  /* lesson instructions dock as a compact column at the playfield's left edge */
+  #lesson-banner { left: 8px; transform: none; top: 8px; bottom: auto; max-width: min(calc(30vw / var(--ui-scale, 1)), 220px); padding: 8px 10px; font-size: 0.85em; }
+  /* toasts sit low, clear of the side rails */
+  #toasts { bottom: calc(12px + var(--safe-bottom)); }
 }
 @media (max-width: 720px) and (orientation: portrait) {
   /* full-width compact instructions above the tray */
@@ -660,6 +681,8 @@ html.ui-scaled #screen-play.active {
 }
 /* Portrait title: the cards and button row fill the screen down to the bottom, so
    account toasts (invite, sign-out) drop in from the top instead of covering them. */
-@media (max-width: 720px) and (orientation: portrait) {
-  #screen-title.active ~ #toasts { top: calc(12px + var(--safe-top)); bottom: auto; }
-}
+/* Menu and results screens: toasts drop in from the top and the screen's top padding
+   reserves their height (--toast-h, set in ui.js), so they never cover a heading or
+   the bottom button rows. In play they stay above the tray. */
+body:has(.screen.active:not(#screen-play)) #toasts { top: calc(12px + var(--safe-top)); bottom: auto; }
+.screen:not(#screen-play) { padding-top: var(--toast-h, 0px); transition: padding-top 150ms ease; }

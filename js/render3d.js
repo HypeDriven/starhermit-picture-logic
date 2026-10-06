@@ -24,6 +24,7 @@ import { SHADOW_MAP, PARTICLE_POOL, MOTE_COUNT } from './gfx.js';
 export const FRAMING = {
   fov: 32,
   pitch: 0.86,          // camera elevation angle (radians)
+  shortPitch: 1.12,     // short landscape canvases (≤480 px tall): steeper, so far rows keep their height
   distancePerCell: 1.06,
   minDistance: 7.5,
   lookAhead: 0.35,      // bias toward the board's far edge
@@ -583,11 +584,11 @@ export class BoardRenderer {
 
     // Reframe camera for the new board size.
     const dist = this._preferredDistance();
-    const to = { dist, pitch: FRAMING.pitch, yaw: 0, y: 0 };
+    const to = { dist, pitch: this._restPitch(), yaw: 0, y: 0 };
     if (this.reducedMotion) {
       this.cameraPose = to;
     } else {
-      this._startTransition({ ...to, dist: dist * 1.35, pitch: FRAMING.pitch + 0.35 }, to, FRAMING.introDuration, easeOutCubic);
+      this._startTransition({ ...to, dist: dist * 1.35, pitch: Math.min(1.35, to.pitch + 0.35) }, to, FRAMING.introDuration, easeOutCubic);
     }
     this._updateCamera();
   }
@@ -795,7 +796,7 @@ export class BoardRenderer {
     if (this.reducedMotion) { this.bloomT = 1; this._applyBloomFinal(); return; }
     this.bloomT = 0;
     const dist = this._preferredDistance() + 2;
-    this._startTransition({ ...this.cameraPose }, { dist, pitch: FRAMING.pitch + 0.12, yaw: 0.35, y: 0 }, FRAMING.winDuration, easeInOut);
+    this._startTransition({ ...this.cameraPose }, { dist, pitch: Math.min(1.35, this._restPitch() + 0.12), yaw: 0.35, y: 0 }, FRAMING.winDuration, easeInOut);
   }
 
   _applyBloomFinal() {
@@ -848,7 +849,7 @@ export class BoardRenderer {
 
   resetCamera() {
     const dist = this._preferredDistance();
-    this._startTransition({ ...this.cameraPose }, { dist, pitch: FRAMING.pitch, yaw: 0, y: 0 }, 0.6, easeOutCubic);
+    this._startTransition({ ...this.cameraPose }, { dist, pitch: this._restPitch(), yaw: 0, y: 0 }, 0.6, easeOutCubic);
   }
 
   // Preferred rest distance: the authored linear framing, but never closer
@@ -1143,10 +1144,25 @@ export class BoardRenderer {
     return { rows: this.rows, cols: this.cols, centers };
   }
 
+  // Rest elevation: steeper on short landscape canvases, where the authored
+  // angle foreshortens a big board's far rows below a readable clue height.
+  _restPitch() {
+    const w = this.canvas.clientWidth || 0, h = this.canvas.clientHeight || 0;
+    return h && h <= 480 && w > h ? FRAMING.shortPitch : FRAMING.pitch;
+  }
+
   resize(width, height) {
+    const restBefore = this._lastRest ?? FRAMING.pitch;
     this._applySize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    // follow a rest-pitch change (rotation) unless the player tilted the view
+    const restAfter = this._restPitch();
+    this._lastRest = restAfter;
+    if (restAfter !== restBefore) {
+      if (this.transition && Math.abs(this.transition.to.pitch - restBefore) < 1e-6) this.transition.to.pitch = restAfter;
+      else if (!this.transition && Math.abs(this.cameraPose.pitch - restBefore) < 1e-6) this.cameraPose.pitch = restAfter;
+    }
     // A narrower view may no longer fit the board: pull back until it does.
     const fit = this._fitDistance();
     if (this.transition) this.transition.to.dist = Math.max(this.transition.to.dist, fit);

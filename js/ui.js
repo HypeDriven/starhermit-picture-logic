@@ -22,6 +22,16 @@ export class UI {
   constructor() {
     this.bindings = structuredClone(FALLBACK_BINDINGS); // keyboard action -> KeyboardEvent.code[]
     this.screens = [...document.querySelectorAll('.screen')];
+    // While a menu/results screen is up the toast stack sits at the top edge and
+    // the screen reserves its height (--toast-h, layout px of the equally zoomed
+    // stack), so a toast never covers a heading or button.
+    const toasts = document.getElementById('toasts');
+    if (toasts && typeof MutationObserver === 'function') {
+      new MutationObserver(() => {
+        const h = toasts.offsetHeight;
+        document.documentElement.style.setProperty('--toast-h', h ? `${h + 8}px` : '0px');
+      }).observe(toasts, { childList: true });
+    }
     this.current = 'screen-title';
     this.focusMemory = new Map();
     this.cellButtons = [];
