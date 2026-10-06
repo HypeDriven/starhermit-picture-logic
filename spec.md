@@ -77,6 +77,8 @@ The Three.js canvas fills the game region but is never the only UI. Menus, text,
 - **Portrait mobile:** top safe-area status bar, square or perspective-fit playfield, bottom thumb-zone action tray, and sheet-based secondary panels. Never place critical controls under browser chrome or display cutouts.
 - **Landscape mobile:** reserve a narrow status rail; preserve at least 44×44 CSS-pixel targets and 8-pixel separation.
 - React to resize, orientation, device-pixel-ratio, safe-area insets, virtual keyboard, and visibility changes without losing input or restarting the round.
+- **Large screens (above 1600×1000):** `ui-scale.js` sets `--ui-scale` (the smaller of width/1600 and height/1000, capped at 2.5); every DOM layer — menu screens, HUD, rails, tray, overlays, countdown, lesson banner, toasts — is CSS-`zoom`ed by it with its vh/vw lengths divided, and the rails' grid tracks widen to match. The playfield (3D canvas plus the projected cell/clue overlay) stays unzoomed and fills the remaining space; the clue font caps grow by the same factor.
+- **Board framing:** the camera fit keeps the whole cell grid and the row clues on screen, panning the board right when the left margin is too narrow for the clues (portrait phones, 15×15). Achievement unlocks are listed on the results screen rather than toasted over it; Settings opens at the top with its body scrolling between the fixed heading and Done.
 
 ### Screens and overlays
 

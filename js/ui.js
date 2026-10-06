@@ -63,7 +63,12 @@ export class UI {
       el._lastFocus = document.activeElement;
       el.classList.add('active');
       const first = el.querySelector('button.primary, button');
-      requestAnimationFrame(() => first?.focus());
+      // preventScroll: focusing a control inside a scrolling body must not open
+      // the panel scrolled past its first section.
+      requestAnimationFrame(() => {
+        first?.focus({ preventScroll: true });
+        for (const sc of el.querySelectorAll('.sheet, .scroll')) sc.scrollTop = 0;
+      });
       // Simple focus trap.
       el.addEventListener('keydown', el._trap = (e) => {
         if (e.key !== 'Tab') return;
@@ -416,7 +421,8 @@ export class UI {
       rowLines[r].style.width = `${q.width}px`;
       rowLines[r].style.height = `${q.height}px`;
     }
-    const clueFont = Math.min(17, Math.max(10, Math.min(lay.cellW, lay.cellH) * 0.42));
+    const uiScale = window.UIScale?.value || 1; // the playfield is unzoomed: grow the cap with the UI
+    const clueFont = Math.min(17 * uiScale, Math.max(10, Math.min(lay.cellW, lay.cellH) * 0.42));
     $('board-frame').style.fontSize = `${clueFont}px`;
   }
 
@@ -430,7 +436,7 @@ export class UI {
     const availW = pf.clientWidth - 24, availH = pf.clientHeight - 24;
     const clueW = this.maxRowClues * 1.1 + 1;
     const clueH = this.maxColClues * 1.3 + 1;
-    const cell = Math.max(18, Math.min(48,
+    const cell = Math.max(18, Math.min(48 * (window.UIScale?.value || 1),
       Math.floor(Math.min(availW / (state.cols + clueW), availH / (state.rows + clueH)))));
     const frame = $('board-frame');
     frame.style.width = `${(state.cols + clueW) * cell}px`;

@@ -882,13 +882,31 @@ export class BoardRenderer {
     const ins = this.safeInsets || {};
     const xMin = -0.86 + 2 * (ins.left || 0), xMax = 0.86 - 2 * (ins.right || 0);
     const yMax = Math.min(0.58, 1 - 2 * (ins.top || 0) - 0.04), yMin = Math.max(-0.92, -1 + 2 * (ins.bottom || 0) + 0.04);
+    const cw = this.canvas.clientWidth || 0;
+    const clueXMin = cw ? -1 + 2 * (ins.clueLeftPx || 0) / cw : -1;
     const fits = (dist) => {
       this.cameraPose.dist = dist;
+      // Row clues extend left of the board: when the left margin is too thin
+      // for them, pan the view so the board slides right into the spare right
+      // margin (a pure sideways translation, so picking and the DOM overlay
+      // follow automatically). No pan is needed when the clues already fit.
+      this.framePan = 0;
       this._updateCamera();
       this.camera.updateMatrixWorld();
+      const nl = this._tmpV.set(-cols / 2, 0.2, rows / 2).project(this.camera).x;
+      const nr = this._tmpV.set(cols / 2, 0.2, rows / 2).project(this.camera).x;
+      const need = Math.max(0, clueXMin - nl);
+      if (need > 0 && nr > nl) {
+        this.framePan = -need / ((nr - nl) / cols);
+        this._updateCamera();
+        this.camera.updateMatrixWorld();
+      }
       for (const [x, y, z] of corners) {
         const p = this._tmpV.set(x, y, z).project(this.camera);
-        if (p.x < xMin || p.x > xMax || p.y > yMax || p.y < yMin) return false;
+        // A panned board may use most of the (clue-free) right margin.
+        const xHi = this.framePan ? Math.max(xMax, 0.94 - 2 * (ins.right || 0)) : xMax;
+        if (p.x < xMin || p.x > xHi || p.y > yMax || p.y < yMin) return false;
+        if (x < 0 && p.x < clueXMin - 0.005) return false;
       }
       return true;
     };
@@ -902,6 +920,7 @@ export class BoardRenderer {
       }
       result = hi;
     }
+    fits(result); // leaves framePan set for the fitted distance
     this.cameraPose.dist = saved;
     this._updateCamera();
     return result;
@@ -920,9 +939,17 @@ export class BoardRenderer {
     const d = p.dist;
     const y = Math.sin(p.pitch) * d;
     const hz = Math.cos(p.pitch) * d;
-    this.camera.position.set(Math.sin(p.yaw) * hz, y + p.y, Math.cos(p.yaw) * hz);
-    this.cameraTarget.set(0, 0, -FRAMING.lookAhead);
+    const pan = this.framePan || 0;
+    this.camera.position.set(Math.sin(p.yaw) * hz + pan, y + p.y, Math.cos(p.yaw) * hz);
+    this.cameraTarget.set(pan, 0, -FRAMING.lookAhead);
     this.camera.lookAt(this.cameraTarget);
+    // Narrow views of big boards pull the camera far back; slide the fog band
+    // with it so the board itself never fogs out (no change up to 40 units).
+    if (this.scene?.fog) {
+      const extra = Math.max(0, d - 40);
+      this.scene.fog.near = 26 + extra;
+      this.scene.fog.far = 70 + extra;
+    }
   }
 
   // -------------------------------------------------------------------------

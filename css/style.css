@@ -112,7 +112,7 @@ p { max-width: 70ch; line-height: 1.5; }
 #screen-title .scroll { display: flex; }
 .hero { margin: auto; text-align: center; max-width: 720px; width: 100%; }
 .hero .logo {
-  font-size: clamp(2.2rem, 7vw, 4rem);
+  font-size: clamp(2.2rem, calc(7vw / var(--ui-scale, 1)), 4rem);
   font-weight: 800;
   letter-spacing: 0.04em;
   margin: 0.2em 0 0.1em;
@@ -219,7 +219,7 @@ button.card:hover { border-color: var(--accent); }
   white-space: nowrap;
 }
 #hud .hud-item .k { color: var(--ink-dim); font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.08em; display: block; }
-#hud-objective { font-weight: 700; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; }
+#hud-objective { font-weight: 700; max-width: calc(34vw / var(--ui-scale, 1)); overflow: hidden; text-overflow: ellipsis; }
 #hud .danger { color: var(--danger); }
 
 #playfield {
@@ -269,7 +269,7 @@ button.card:hover { border-color: var(--accent); }
   min-width: 1.15em;
   text-align: center;
   font-weight: 700;
-  font-size: clamp(10px, 2.4vmin, 17px);
+  font-size: clamp(10px, 2.4vmin, calc(17px * var(--ui-scale, 1)));
   color: var(--ink);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   font-variant-numeric: tabular-nums;
@@ -321,7 +321,7 @@ button.card:hover { border-color: var(--accent); }
 .cell-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; z-index: 2; }
 .cell-btn.marked::after {
   content: "✕";
-  font-size: clamp(9px, 2vmin, 15px);
+  font-size: clamp(9px, 2vmin, calc(15px * var(--ui-scale, 1)));
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 .cell-btn.filled { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--filled) 60%, transparent); }
@@ -383,10 +383,14 @@ button.card:hover { border-color: var(--accent); }
   padding: 22px;
   max-width: 560px;
   width: 100%;
-  max-height: min(84vh, 720px);
+  max-height: min(calc(84vh / var(--ui-scale, 1)), 720px);
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
+/* Settings: the body scrolls between the fixed heading and Done, so Done is never cut off. */
+#overlay-settings .sheet { display: flex; flex-direction: column; }
+#settings-body { flex: 1 1 auto; min-height: 0; }
+#overlay-settings .btn-col { flex: none; }
 .sheet .btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .sheet .btn-col button { width: 100%; text-align: left; padding: 12px 14px; }
 
@@ -413,6 +417,7 @@ button.card:hover { border-color: var(--accent); }
 .set-row .hint { display: block; color: var(--ink-dim); font-size: 0.8em; }
 .set-row input[type="range"] { width: 160px; accent-color: var(--accent); }
 .set-row select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 44px; }
+.set-row input[type="text"] { width: 12em; max-width: 50%; min-width: 0; }
 .set-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); }
 .set-group { margin: 18px 0 6px; color: var(--accent); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.1em; }
 
@@ -520,7 +525,7 @@ body.reduced-motion #screen-title::before { animation: none !important; }
 }
 #countdown.active { display: flex; }
 #countdown .num {
-  font-size: clamp(4rem, 18vmin, 9rem);
+  font-size: clamp(4rem, calc(18vmin / var(--ui-scale, 1)), 9rem);
   font-weight: 800;
   color: var(--accent);
   text-shadow: 0 4px 40px rgba(0, 0, 0, 0.6);
@@ -532,7 +537,7 @@ body.reduced-motion #screen-title::before { animation: none !important; }
   left: 50%;
   transform: translateX(-50%);
   bottom: calc(86px + var(--safe-bottom));
-  max-width: min(92vw, 560px);
+  max-width: min(calc(92vw / var(--ui-scale, 1)), 560px);
   background: var(--panel-2);
   border: 1px solid var(--accent);
   border-radius: 14px;
@@ -598,7 +603,7 @@ body.reduced-motion #screen-title::before { animation: none !important; }
 @media (max-width: 720px) {
   #hud { gap: 6px; }
   #hud .hud-item { padding: 4px 9px; font-size: 0.88em; }
-  #hud-objective { max-width: 46vw; }
+  #hud-objective { max-width: calc(46vw / var(--ui-scale, 1)); }
   .topbar h1 { font-size: 1.05em; }
 }
 
@@ -607,11 +612,11 @@ body.reduced-motion #screen-title::before { animation: none !important; }
   #hud { padding-top: calc(4px + var(--safe-top)); padding-bottom: 4px; }
   #tray { padding-top: 4px; padding-bottom: calc(4px + var(--safe-bottom)); }
   /* lesson instructions dock as a compact left column beside the board */
-  #lesson-banner { left: calc(8px + var(--safe-left)); transform: none; top: calc(52px + var(--safe-top)); bottom: auto; max-width: min(34vw, 260px); padding: 8px 10px; font-size: 0.85em; }
+  #lesson-banner { left: calc(8px + var(--safe-left)); transform: none; top: calc(52px + var(--safe-top)); bottom: auto; max-width: min(calc(34vw / var(--ui-scale, 1)), 260px); padding: 8px 10px; font-size: 0.85em; }
 }
 @media (max-width: 720px) and (orientation: portrait) {
   /* full-width compact instructions above the tray */
-  #lesson-banner { max-width: calc(100vw - 16px); width: calc(100vw - 16px); padding: 8px 12px; font-size: 0.9em; }
+  #lesson-banner { max-width: calc(100vw / var(--ui-scale, 1) - 16px); width: calc(100vw / var(--ui-scale, 1) - 16px); padding: 8px 12px; font-size: 0.9em; }
 }
 
 /* --------------------------------------------------------- accessibility */
@@ -640,4 +645,21 @@ body.left-handed #tray { flex-direction: row-reverse; }
     animation-duration: 0.001s !important;
     transition-duration: 0.001s !important;
   }
+}
+
+/* ------------------------------------------------------------ large screens */
+/* ui-scale.js sets --ui-scale (1 up to 1600x1000). Every DOM chrome layer zooms by it
+   (vw/vh lengths inside are divided by it); the play screen's #playfield - the 3D canvas and
+   the projected board overlay - stays unzoomed and simply fills the space the larger HUD,
+   rails and tray leave, so its pointer and projection maths need no change. */
+.screen:not(#screen-play), #hud, .rail, #tray, #countdown, #lesson-banner, .overlay, #toasts, #fps-meter {
+  zoom: var(--ui-scale, 1);
+}
+html.ui-scaled #screen-play.active {
+  grid-template-columns: calc(230px * var(--ui-scale)) 1fr calc(230px * var(--ui-scale));
+}
+/* Portrait title: the cards and button row fill the screen down to the bottom, so
+   account toasts (invite, sign-out) drop in from the top instead of covering them. */
+@media (max-width: 720px) and (orientation: portrait) {
+  #screen-title.active ~ #toasts { top: calc(12px + var(--safe-top)); bottom: auto; }
 }

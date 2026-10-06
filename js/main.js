@@ -982,7 +982,7 @@ class Game {
           : this.failText(st.reason),
         progressText, achievements: unlocked, nextLabel,
       });
-      for (const a of unlocked) this.ui.toast(`Achievement: ${a}`, 'achv');
+      // Unlocks are listed on the results screen itself; a toast here would cover its buttons.
       this.audio.setMusicIntensity(0.3);
     }, wait);
   }
@@ -1315,6 +1315,12 @@ class Game {
       else if (e.t >= 0.5) ins.bottom = Math.max(ins.bottom, 1 - e.t);
       else ins.top = Math.max(ins.top, e.b);
     }
+    // Row clues sit left of the cell grid; reserve their pixel width so the
+    // camera fit keeps them on screen (narrow portrait views clipped them).
+    const clue = document.querySelector('#row-clues .clue');
+    const font = clue ? parseFloat(getComputedStyle(clue).fontSize) || 12 : 12;
+    const nr = this.ui.maxRowClues || 1;
+    ins.clueLeftPx = nr * 1.15 * font + (nr - 1) * 4 + 6 + 4;
     this.renderer.setSafeInsets(ins);
   }
 

@@ -13,6 +13,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141a28'/%3E%3Crect x='7' y='7' width='8' height='8' rx='2' fill='%23e8a84b'/%3E%3Crect x='17' y='7' width='8' height='8' rx='2' fill='%23232d44'/%3E%3Crect x='7' y='17' width='8' height='8' rx='2' fill='%23232d44'/%3E%3Crect x='17' y='17' width='8' height='8' rx='2' fill='%238fd6a0'/%3E%3C/svg%3E">
 <script src="browser-guard.js"></script>
+<script src="ui-scale.js"></script>
 <script src="starhermit-sdk.js"></script>
 <script>StarHermit.init();</script>
 </head>
@@ -287,7 +288,7 @@
   <div class="overlay" id="overlay-settings" role="dialog" aria-modal="true" aria-labelledby="settings-h">
     <div class="sheet" style="max-width:640px">
       <h2 id="settings-h">Settings</h2>
-      <div class="scroll" style="padding:0;overflow-y:auto;max-height:70vh" id="settings-body"></div>
+      <div class="scroll" style="padding:0;overflow-y:auto" id="settings-body"></div>
       <div class="btn-col">
         <button class="primary" id="settings-close">Done</button>
       </div>
