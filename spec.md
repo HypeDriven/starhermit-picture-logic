@@ -172,7 +172,7 @@ Files: `js/gfx.js` (pure quality model: presets, categories, `detectPreset`, `re
 - `ui`: responsive DOM shell, focus, localization, settings, overlays, accessibility mirror.
 - `audio`: buses, event mapping, focus/background behavior, decode and memory policy.
 - `content`: versioned levels, themes, tutorials, validation metadata.
-- `platform`: ships as js/platform.js — adapter over the shared StarHermit SDK: launch token and renewal, sign-in, account nickname, cloud save (slot `game:<slug>`), settings KV, keyboard bindings, invite link, read-only leaderboards.
+- `platform`: ships as js/platform.js — adapter over the shared StarHermit SDK: launch token and renewal, sign-in, account nickname, cloud save (slot `game:<slug>`), settings KV, keyboard bindings, invite link, leaderboard reads and `submitScore` (posts a won ranked round through `StarHermit.submitScores`).
 
 No module may mutate rules state except through a validated command. Rendering consumes immutable snapshots plus interpolation data. UI state and simulation state are separate so closing a drawer cannot affect a match.
 
@@ -194,7 +194,7 @@ No module may mutate rules state except through a validated command. Rendering c
 ## 6. StarHermit integration
 
 ### Packaging and launch
-- The distribution has `starhermit.txt` at its root (`name=Picture Logic`, `launch=index.html`, `server=server.js`, `control.*` lines). `index.html` loads the shared SDK `starhermit-sdk.js` (an unchanged copy of `tools/starhermit-sdk.js`) and calls `StarHermit.init()` before the game modules; `js/platform.js` is the game's adapter over `window.StarHermit`.
+- The distribution has `starhermit.txt` at its root (`name=Picture Logic`, `launch=index.html`, `server=score-script.js`, `control.*` lines). `score-script.js` is the platform script: it range-checks a posted score and adds it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). `index.html` loads the shared SDK `starhermit-sdk.js` (an unchanged copy of `tools/starhermit-sdk.js`) and calls `StarHermit.init()` before the game modules; `js/platform.js` is the game's adapter over `window.StarHermit`.
 - The SDK reads `#game_token=` (library launch) or `#access_token=` (direct sign-in return), strips it from the URL, takes the slug from the `game_scope` claim and renews the token via `POST /api/v1/games/{slug}/launch-token`. Tokens are never persisted. When renewal is refused the game toasts that it is signed out and keeps playing locally.
 - Without a token no StarHermit request is made. On `<id>.starhermit.com` without a token the title shows **Sign in with StarHermit**, which redirects through the platform sign-in.
 - Hosted, the clock syncs with `GET /api/v1/time` (round-trip adjusted) for daily boundaries.
@@ -208,10 +208,10 @@ No module may mutate rules state except through a validated command. Rendering c
 
 ### Achievements and leaderboards
 - Achievements are local and part of the cloud-saved progress doc; the platform has no server-declared achievements for this game.
-- Score Chase shows the game's first platform leaderboard read-only (nicknames resolved through profiles) when hosted, otherwise the local board. The client never submits scores.
+- Score Chase shows the game's first platform leaderboard read-only (nicknames resolved through profiles) when hosted, otherwise the local board. When signed in, every won Journey, Daily or Challenge round posts its total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board, integer, higher is better, 0–20,000), and the results Progress card shows "Leaderboard rank: #N" (or "Score posted…" / "Score not posted…"), localized in the nine locales. Practice, lessons and lost rounds post nothing; standalone play posts nothing.
 
 ### Sessions and transport
-- The game is solo. The repo's `server.js` is a plain dev server (static hosting, time, telemetry intake, replay-validated local boards); its telemetry route is used only when it is serving and the game is not hosted.
+- The game is solo. The repo's `server.js` is a plain local dev server (static hosting, time, telemetry intake, replay-validated local boards); its telemetry route is used only when it is serving and the game is not hosted.
 - Matchmaking, sessions, chat, friends picker, replays, realtime rooms and voice are not used: they add nothing to a solo puzzle game.
 
 ## 7. Content, economy, and retention

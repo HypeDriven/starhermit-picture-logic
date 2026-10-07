@@ -949,6 +949,8 @@ class Game {
       this.ui.lessonBanner(null);
     }
 
+    this.postToLeaderboard(won && ['journey', 'daily', 'challenge'].includes(s.kind) ? comp.total : null);
+
     if (won && s.kind !== 'lesson') {
       this.store.addLeaderboard({
         name: this.platform.nickname || this.store.settings.profileName || 'You',
@@ -985,6 +987,22 @@ class Game {
       // Unlocks are listed on the results screen itself; a toast here would cover its buttons.
       this.audio.setMusicIntensity(0.3);
     }, wait);
+  }
+
+  // Hosted play only: post a won journey, daily or challenge round to the
+  // platform high-score board; the results Progress card shows the rank.
+  postToLeaderboard(total) {
+    const line = document.getElementById('result-lb');
+    const token = this.lbToken = {};
+    line.hidden = true;
+    if (total == null || !this.platform.hosted) return;
+    const t = currentPlatformStrings();
+    line.textContent = t.lbPosting;
+    line.hidden = false;
+    this.platform.submitScore(total).then((r) => {
+      if (token !== this.lbToken) return;
+      line.textContent = !r.posted ? t.lbFailed : r.rank ? t.lbRank.replace('{rank}', r.rank) : t.lbPosted;
+    });
   }
 
   failText(reason) {

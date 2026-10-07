@@ -47,6 +47,19 @@ export class Platform {
   canSignIn() { return !!(sdk() && sdk().canSignIn()); }
   signIn() { return !!(sdk() && sdk().signIn()); }
   inviteLink() { return this.hosted ? sdk().inviteLink() : null; }
+  // Post a winning ranked round to the high-score board (score-script.js);
+  // resolves { posted, rank } — rank on that board, or null.
+  async submitScore(total) {
+    if (!this.hosted) return { posted: false, rank: null };
+    const sh = sdk();
+    const keys = await sh.submitScores({ 'high-score': total });
+    if (keys.indexOf('high-score') < 0) return { posted: false, rank: null };
+    try {
+      const r = await sh.leaderboard('high-score', { pageSize: 100 });
+      const me = (r.items || []).find((i) => i.userId === sh.userId);
+      return { posted: true, rank: me ? me.rank : null };
+    } catch { return { posted: true, rank: null }; }
+  }
 
   // ------------------------------------------------------------------ profile
 
