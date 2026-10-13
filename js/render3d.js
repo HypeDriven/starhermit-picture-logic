@@ -1101,13 +1101,13 @@ export class BoardRenderer {
       this._buildPost(w, h);
     }
     if (this.composer) {
-      try { this.composer.render(dt); } catch (e) {
+      try { (globalThis.GameOptions ? globalThis.GameOptions.draw(this.composer.renderer, () => this.composer.render(dt)) : this.composer.render(dt)); } catch (e) {
         this.postFailed = true;
         this.composer = null;
         this.renderer.setRenderTarget(null);
-        this.renderer.render(this.scene, this.camera);
+        (globalThis.GameOptions ? globalThis.GameOptions.draw(this.renderer, () => this.renderer.render(this.scene, this.camera)) : this.renderer.render(this.scene, this.camera));
       }
-    } else this.renderer.render(this.scene, this.camera);
+    } else (globalThis.GameOptions ? globalThis.GameOptions.draw(this.renderer, () => this.renderer.render(this.scene, this.camera)) : this.renderer.render(this.scene, this.camera));
   }
 
   // Project a board cell to CSS-pixel coordinates relative to the canvas.
