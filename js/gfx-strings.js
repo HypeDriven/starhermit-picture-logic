@@ -1,5 +1,5 @@
 // Picture Logic — localized strings for the Graphics settings section.
-// The rest of the game is English-only; this panel follows navigator.language.
+// The game language (js/i18n.js getLocale()) selects the table at use time.
 'use strict';
 
 const en = {

@@ -6,6 +6,7 @@
 import { CELL, STATUS, scoreComponents, legalTargets } from './rules.js';
 import { THEMES, CVD_PALETTE } from './content.js';
 import { ACHIEVEMENTS } from './store.js';
+import { t, num } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -147,9 +148,9 @@ export class UI {
     for (const m of MODE_INFO) {
       const btn = document.createElement('button');
       btn.className = 'row-btn';
-      btn.innerHTML = `<span class="grow"><strong>${m.name}</strong><br>
-        <span class="sub">${m.desc}</span></span>
-        ${m.ranked ? '<span class="badge ranked">ranked</span>' : ''}`;
+      btn.innerHTML = `<span class="grow"><strong>${escapeHtml(t(m.name))}</strong><br>
+        <span class="sub">${escapeHtml(t(m.desc))}</span></span>
+        ${m.ranked ? `<span class="badge ranked">${escapeHtml(t('ranked'))}</span>` : ''}`;
       btn.addEventListener('click', () => this.onModeSelect?.(m.id));
       list.appendChild(btn);
     }
@@ -167,13 +168,14 @@ export class UI {
       btn.className = 'stage-btn' + (s.mastery ? ' mastery' : '') + (unlocked ? '' : ' locked');
       btn.disabled = !unlocked;
       const stars = rec ? '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars) : '☆☆☆';
-      btn.innerHTML = `<span>${i + 1}</span><span class="stars" aria-label="${rec?.stars || 0} of 3 stars">${stars}</span>`;
+      btn.innerHTML = `<span>${i + 1}</span><span class="stars" aria-label="${escapeHtml(t('{n} of 3 stars', { n: rec?.stars || 0 }))}">${stars}</span>`;
       btn.setAttribute('role', 'listitem');
-      btn.setAttribute('aria-label', `Stage ${i + 1}${s.mastery ? ' (mastery)' : ''}, ${s.rows} by ${s.cols}${unlocked ? '' : ', locked'}`);
+      btn.setAttribute('aria-label', t(s.mastery ? (unlocked ? 'Stage {n} (mastery), {rows} by {cols}' : 'Stage {n} (mastery), {rows} by {cols}, locked')
+        : (unlocked ? 'Stage {n}, {rows} by {cols}' : 'Stage {n}, {rows} by {cols}, locked'), { n: i + 1, rows: s.rows, cols: s.cols }));
       if (unlocked) btn.addEventListener('click', () => this.onJourneyStage?.(s));
       grid.appendChild(btn);
     });
-    $('journey-progress-badge').textContent = `${completedCount} / ${stages.length} done`;
+    $('journey-progress-badge').textContent = t('{done} / {total} done', { done: completedCount, total: stages.length });
   }
 
   buildPracticeList(presets, bests) {
@@ -183,8 +185,8 @@ export class UI {
       const btn = document.createElement('button');
       btn.className = 'row-btn';
       const best = bests[p.id];
-      btn.innerHTML = `<span class="grow"><strong>${p.name}</strong> · ${p.rows}×${p.cols}<br>
-        <span class="sub">${p.note}${best ? ` · best ${best.toLocaleString()}` : ''}</span></span>`;
+      btn.innerHTML = `<span class="grow"><strong>${escapeHtml(t(p.name))}</strong> · ${p.rows}×${p.cols}<br>
+        <span class="sub">${escapeHtml(t(p.note))}${best ? ` · ${escapeHtml(t('best {score}', { score: num(best) }))}` : ''}</span></span>`;
       btn.addEventListener('click', () => this.onPracticePreset?.(p));
       list.appendChild(btn);
     }
@@ -198,14 +200,14 @@ export class UI {
       btn.className = 'row-btn';
       const rec = progress.challenges[c.id];
       const rules = [];
-      if (c.constraints.timeLimitMs) rules.push(`⏱ ${Math.round(c.constraints.timeLimitMs / 1000)}s limit`);
-      if (c.constraints.maxMistakes) rules.push(`${c.constraints.maxMistakes} mistakes max`);
-      if (c.constraints.allowMarks === false) rules.push('no marks');
-      if (c.constraints.allowHints === false) rules.push('no hints');
-      if (c.constraints.moveLimit) rules.push(`${c.constraints.moveLimit} moves max`);
-      btn.innerHTML = `<span class="grow"><strong>${c.name}</strong> · ${c.rows}×${c.cols}<br>
-        <span class="sub">${c.desc} · ${rules.join(' · ')}${rec ? ` · best ${rec.score.toLocaleString()}` : ''}</span></span>
-        <span class="badge ranked">ranked</span>`;
+      if (c.constraints.timeLimitMs) rules.push('⏱ ' + t('{n}s limit', { n: Math.round(c.constraints.timeLimitMs / 1000) }));
+      if (c.constraints.maxMistakes) rules.push(t('{n} mistakes max', { n: c.constraints.maxMistakes }));
+      if (c.constraints.allowMarks === false) rules.push(t('no marks'));
+      if (c.constraints.allowHints === false) rules.push(t('no hints'));
+      if (c.constraints.moveLimit) rules.push(t('{n} moves max', { n: c.constraints.moveLimit }));
+      btn.innerHTML = `<span class="grow"><strong>${escapeHtml(t(c.name))}</strong> · ${c.rows}×${c.cols}<br>
+        <span class="sub">${escapeHtml(t(c.desc))} · ${escapeHtml(rules.join(' · '))}${rec ? ` · ${escapeHtml(t('best {score}', { score: num(rec.score) }))}` : ''}</span></span>
+        <span class="badge ranked">${escapeHtml(t('ranked'))}</span>`;
       btn.addEventListener('click', () => this.onChallenge?.(c));
       list.appendChild(btn);
     }
@@ -218,8 +220,8 @@ export class UI {
       const done = !!progress.lessons[l.id];
       const btn = document.createElement('button');
       btn.className = 'row-btn';
-      btn.innerHTML = `<span class="grow"><strong>${i + 1}. ${l.name}</strong><br>
-        <span class="sub">${l.goal}</span></span>${done ? '<span class="badge ranked">done</span>' : ''}`;
+      btn.innerHTML = `<span class="grow"><strong>${i + 1}. ${escapeHtml(t(l.name))}</strong><br>
+        <span class="sub">${escapeHtml(t(l.goal))}</span></span>${done ? `<span class="badge ranked">${escapeHtml(t('done'))}</span>` : ''}`;
       btn.addEventListener('click', () => this.onLesson?.(l));
       list.appendChild(btn);
     });
@@ -228,17 +230,19 @@ export class UI {
   buildHelpControls(gamepadMap) {
     const grid = $('controls-grid');
     const keys = (...actions) => actions.map((a) => (this.bindings[a] || []).map(keyLabel).map((k) => `<kbd>${k}</kbd>`).join(' / ')).join(' ');
+    this._gamepadMap = gamepadMap;
+    const pad = (n) => escapeHtml(t('gamepad button {n}', { n }));
     const rows = [
-      ['Move cursor', `${keys('cursor_up', 'cursor_left', 'cursor_down', 'cursor_right')} / D-pad / left stick`],
-      ['Fill cell', `${keys('fill')} / gamepad button ${gamepadMap.fill}`],
-      ['Mark ✕', `${keys('mark')} / gamepad button ${gamepadMap.mark}`],
+      ['Move cursor', `${keys('cursor_up', 'cursor_left', 'cursor_down', 'cursor_right')} / ${escapeHtml(t('D-pad'))} / ${escapeHtml(t('left stick'))}`],
+      ['Fill cell', `${keys('fill')} / ${pad(gamepadMap.fill)}`],
+      ['Mark ✕', `${keys('mark')} / ${pad(gamepadMap.mark)}`],
       ['Clear mark', keys('clear')],
-      ['Hint', `${keys('hint')} / gamepad button ${gamepadMap.hint}`],
-      ['Undo', `${keys('undo')} / gamepad button ${gamepadMap.undo}`],
-      ['Pause', `${keys('pause')} / gamepad button ${gamepadMap.pause}`],
-      ['Reset camera', `${keys('camera')} / gamepad button ${gamepadMap.camera}`],
+      ['Hint', `${keys('hint')} / ${pad(gamepadMap.hint)}`],
+      ['Undo', `${keys('undo')} / ${pad(gamepadMap.undo)}`],
+      ['Pause', `${keys('pause')} / ${pad(gamepadMap.pause)}`],
+      ['Reset camera', `${keys('camera')} / ${pad(gamepadMap.camera)}`],
     ];
-    grid.innerHTML = rows.map(([k, v]) => `<div class="help-card"><h3>${k}</h3><p>${v}</p></div>`).join('');
+    grid.innerHTML = rows.map(([k, v]) => `<div class="help-card"><h3>${escapeHtml(t(k))}</h3><p>${v}</p></div>`).join('');
   }
 
   // ------------------------------------------------------------ play board
@@ -305,8 +309,8 @@ export class UI {
 
   _cellLabel(state, r, c) {
     const v = state.grid[r * state.cols + c];
-    const word = v === CELL.FILLED ? 'lit' : v === CELL.MARKED ? 'crossed' : 'unknown';
-    return `Row ${r + 1}, column ${c + 1}, ${word}`;
+    const key = v === CELL.FILLED ? 'Row {r}, column {c}, lit' : v === CELL.MARKED ? 'Row {r}, column {c}, crossed' : 'Row {r}, column {c}, unknown';
+    return t(key, { r: r + 1, c: c + 1 });
   }
 
   // Pointer painting with a stroke set so a drag never double-commits a cell.
@@ -561,7 +565,7 @@ export class UI {
 
   showResults({ state, puzzle, modeLabel, sub, progressText, achievements, nextLabel }) {
     const comp = scoreComponents(state);
-    $('result-title').textContent = state.status === STATUS.COMPLETE ? 'Picture revealed' : 'The light faded';
+    $('result-title').textContent = state.status === STATUS.COMPLETE ? t('Picture revealed') : t('The light faded');
     $('result-mode').textContent = modeLabel;
     $('result-sub').textContent = sub;
     const rows = [
@@ -573,8 +577,8 @@ export class UI {
       ['Hints', -comp.hintPenalty, 'neg'],
     ];
     $('score-table').innerHTML =
-      rows.map(([k, v, cls]) => `<tr class="${v < 0 ? cls || '' : ''}"><td>${k}</td><td>${v < 0 ? '-' : '+'}${Math.abs(v).toLocaleString()}</td></tr>`).join('') +
-      `<tr class="total"><td>Total</td><td>${comp.total.toLocaleString()}</td></tr>`;
+      rows.map(([k, v, cls]) => `<tr class="${v < 0 ? cls || '' : ''}"><td>${escapeHtml(t(k))}</td><td>${v < 0 ? '-' : '+'}${num(Math.abs(v))}</td></tr>`).join('') +
+      `<tr class="total"><td>${escapeHtml(t('Total'))}</td><td>${num(comp.total)}</td></tr>`;
     $('result-progress').textContent = progressText;
     const ac = $('result-achv-card');
     if (achievements?.length) {
@@ -582,7 +586,7 @@ export class UI {
       $('result-achv').textContent = achievements.join(' · ');
     } else ac.hidden = true;
     $('result-next').textContent = nextLabel;
-    this.show('screen-results');
+    if (this.current !== 'screen-results') this.show('screen-results');
   }
 
   // ------------------------------------------------------------ scores
@@ -592,19 +596,19 @@ export class UI {
     const table = (entries, empty) => {
       if (!entries.length) return `<p class="dim">${empty}</p>`;
       return `<table class="board-table"><thead><tr>
-        <th>#</th><th>Who</th><th class="num">Score</th><th class="num">Mistakes</th><th class="num">Time</th><th>Seed</th></tr></thead><tbody>${
+        <th>#</th><th>${escapeHtml(t('Who'))}</th><th class="num">${escapeHtml(t('Score'))}</th><th class="num">${escapeHtml(t('Mistakes'))}</th><th class="num">${escapeHtml(t('Time'))}</th><th>${escapeHtml(t('Seed'))}</th></tr></thead><tbody>${
         entries.map((e, i) => `<tr class="${e.me ? 'me' : ''}"><td>${i + 1}</td><td>${escapeHtml(e.name)}</td>
-          <td class="num">${e.score.toLocaleString()}</td><td class="num">${e.mistakes}</td>
+          <td class="num">${num(e.score)}</td><td class="num">${e.mistakes}</td>
           <td class="num">${Math.floor(e.elapsedMs / 60000)}:${String(Math.floor(e.elapsedMs / 1000) % 60).padStart(2, '0')}</td>
           <td class="dim small">${escapeHtml(String(e.seed ?? ''))}</td></tr>`).join('')}</tbody></table>`;
     };
-    $('daily-board').innerHTML = table(dailyEntries, 'No global scores yet.');
-    $('local-board').innerHTML = table(localEntries, 'Finish any puzzle to post a local best.');
+    $('daily-board').innerHTML = table(dailyEntries, escapeHtml(t('No global scores yet.')));
+    $('local-board').innerHTML = table(localEntries, escapeHtml(t('Finish any puzzle to post a local best.')));
     $('achv-grid').innerHTML = ACHIEVEMENTS.map(a => {
       const got = achievements[a.key];
       return `<div class="help-card" style="${got ? '' : 'opacity:0.55'}">
-        <h3>${got ? '🏅' : '🔒'} ${a.name}</h3><p class="small dim">${a.desc}</p>
-        ${got ? `<p class="small" style="color:var(--accent)">Unlocked ${got.slice(0, 10)}</p>` : ''}</div>`;
+        <h3>${got ? '🏅' : '🔒'} ${escapeHtml(t(a.name))}</h3><p class="small dim">${escapeHtml(t(a.desc))}</p>
+        ${got ? `<p class="small" style="color:var(--accent)">${escapeHtml(t('Unlocked {date}', { date: got.slice(0, 10) }))}</p>` : ''}</div>`;
     }).join('');
   }
 

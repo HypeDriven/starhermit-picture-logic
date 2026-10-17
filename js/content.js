@@ -171,8 +171,8 @@ export function generatePuzzle({ seed, rows, cols, density = 0.62, maxTries = 40
 // Picture naming — original compound names from theme word banks.
 // ---------------------------------------------------------------------------
 
-const NAME_A = ['Lantern', 'Sprout', 'Beacon', 'Petal', 'Pebble', 'Moth', 'Acorn', 'Comet', 'Shell', 'Fern', 'Ember', 'Drift', 'Wisp', 'Bloom', 'Pebble', 'Hollow', 'Sparrow', 'Mushroom', 'Kite', 'Anchor'];
-const NAME_B = ['Fox', 'Owl', 'Whale', 'Hare', 'Wren', 'Newt', 'Crane', 'Mole', 'Lark', 'Otter', 'Finch', 'Badger', 'Heron', 'Shrew', 'Raven', 'Toad', 'Vole', 'Ibis', 'Elk', 'Wolf'];
+export const NAME_A = ['Lantern', 'Sprout', 'Beacon', 'Petal', 'Pebble', 'Moth', 'Acorn', 'Comet', 'Shell', 'Fern', 'Ember', 'Drift', 'Wisp', 'Bloom', 'Pebble', 'Hollow', 'Sparrow', 'Mushroom', 'Kite', 'Anchor'];
+export const NAME_B = ['Fox', 'Owl', 'Whale', 'Hare', 'Wren', 'Newt', 'Crane', 'Mole', 'Lark', 'Otter', 'Finch', 'Badger', 'Heron', 'Shrew', 'Raven', 'Toad', 'Vole', 'Ibis', 'Elk', 'Wolf'];
 
 export function namePuzzle(seed) {
   const rng = new Rng(seed ^ 0x51ED, 'name');

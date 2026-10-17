@@ -175,3 +175,52 @@ export const ACHIEVEMENTS = [
   { key: 'mastery', name: 'Mastery Bloom', desc: 'Complete a gold mastery stage.' },
   { key: 'century', name: 'Keeper of the Board', desc: 'Complete 100 puzzles.' },
 ];
+
+// Cloud-save merge (start-up load and `saveconflict`): neither side's progress
+// is dropped. Best values win per record; sets are unioned; the in-progress
+// snapshot and current clean streak are this device's.
+export function mergeProgress(remote, local) {
+  const r = remote && typeof remote === 'object' ? remote : {};
+  const l = local && typeof local === 'object' ? local : {};
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const journey = { ...obj(r.journey) };
+  for (const [id, b] of Object.entries(obj(l.journey))) {
+    const a = journey[id];
+    if (!a) { journey[id] = b; continue; }
+    const ms = [a.bestMs, b.bestMs].filter((x) => typeof x === 'number');
+    journey[id] = {
+      stars: Math.max(num(a.stars), num(b.stars)),
+      bestScore: Math.max(num(a.bestScore), num(b.bestScore)),
+      bestMs: ms.length ? Math.min(...ms) : null,
+      completed: !!(a.completed || b.completed),
+    };
+  }
+  const better = (x, y) => (!x ? y : !y ? x : num(y.score) > num(x.score) ? y : x);
+  const dailies = { ...obj(r.dailies) };
+  for (const [k, v] of Object.entries(obj(l.dailies))) dailies[k] = better(dailies[k], v);
+  const challenges = { ...obj(r.challenges) };
+  for (const [k, v] of Object.entries(obj(l.challenges))) challenges[k] = better(challenges[k], v);
+  const achievements = { ...obj(r.achievements) };
+  for (const [k, v] of Object.entries(obj(l.achievements))) {
+    achievements[k] = achievements[k] && String(achievements[k]) < String(v) ? achievements[k] : v;
+  }
+  const seen = new Set();
+  const leaderboard = [...arr(l.leaderboard), ...arr(r.leaderboard)]
+    .filter((e) => { const k = JSON.stringify(e); if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => num(b.score) - num(a.score)).slice(0, 50);
+  return {
+    ...r, ...l,
+    journey,
+    lessons: { ...obj(r.lessons), ...obj(l.lessons) },
+    dailies, challenges, achievements, leaderboard,
+    practicePlays: Math.max(num(r.practicePlays), num(l.practicePlays)),
+    completions: Math.max(num(r.completions), num(l.completions)),
+    cleanStreak: num(l.cleanStreak),
+    bestCleanStreak: Math.max(num(r.bestCleanStreak), num(l.bestCleanStreak)),
+    dailyDates: [...new Set([...arr(r.dailyDates), ...arr(l.dailyDates)])].sort(),
+    excludedDailies: [...new Set([...arr(r.excludedDailies), ...arr(l.excludedDailies)])],
+    lastSnapshot: l.lastSnapshot || r.lastSnapshot || null,
+  };
+}

@@ -12,14 +12,18 @@ import {
   CONTENT_VERSION, THEMES, themeById, JOURNEY_STAGES, dailySpec, utcDateKey,
   challengeSpecs, utcWeekKey, PRACTICE_PRESETS, LESSONS, buildPuzzle, puzzleHash,
 } from './content.js';
-import { Store, ACHIEVEMENTS, migrateGraphics, DEFAULT_SETTINGS } from './store.js';
+import { Store, ACHIEVEMENTS, migrateGraphics, DEFAULT_SETTINGS, mergeProgress } from './store.js';
 import { PRESETS, CATEGORIES, autoPreset, resolve, choosePreset, presetTier, describe } from './gfx.js';
 import { gfxStrings } from './gfx-strings.js';
 import { UI, MODE_INFO, formatMs, escapeHtml, FALLBACK_BINDINGS as DEFAULT_BINDINGS } from './ui.js';
 import { AudioEngine } from './audio.js';
 import { hashSeed } from './prng.js';
 import { Platform } from './platform.js';
-import { currentPlatformStrings } from './platform-i18n.js';
+import { platformStrings, pickPlatformLocale } from './platform-i18n.js';
+import { t as tr, getLocale, onLocaleChange, puzzleName, num } from './i18n.js';
+
+// StarHermit account strings in the game language (read at use time).
+const ps = () => platformStrings(pickPlatformLocale(getLocale()));
 
 
 const BUILD_VERSION = '1.0.0';
@@ -47,7 +51,6 @@ class Game {
     this._lastFrame = 0;
     this.gpu = '';               // unmasked GPU renderer string, when exposed
     this.gfxAuto = 'balanced';   // Auto preset for this device
-    this.gfxText = gfxStrings(navigator.language);
     this._gamepad = { prev: [], axisAt: 0 };
     this._remapTarget = null;
     this._layoutCounter = 0;
@@ -67,6 +70,8 @@ class Game {
   }
 
   get hosted() { return this.platform.hosted; }
+  // Graphics strings follow the game language.
+  get gfxText() { return gfxStrings(getLocale()); }
 
   // ------------------------------------------------------------------ boot
 
@@ -76,13 +81,15 @@ class Game {
     this.ui.setThemeVars(themeById(this.store.settings.theme), this.store.settings.palette);
     this.ui.applyAccessibilityClasses(this.store.settings);
     this.ui.holdToMark = this.store.settings.holdToMark;
-    document.getElementById('title-version').textContent = `v${BUILD_VERSION} · content v${CONTENT_VERSION}`;
+    const version = () => { document.getElementById('title-version').textContent = tr('v{build} · content v{content}', { build: BUILD_VERSION, content: CONTENT_VERSION }); };
+    version();
+    onLocaleChange(version);
 
     this.flat = !this.detectWebGL();
     this.applyGraphics(false);
     if (this.flat) {
       document.getElementById('playfield').classList.add('flat');
-      this.ui.toast('3D is unavailable in this browser — playing the accessible flat board.', '');
+      this.ui.toast(tr('3D is unavailable in this browser — playing the accessible flat board.'), '');
     } else {
       this.buildRenderer();
     }
@@ -96,6 +103,7 @@ class Game {
       await this.loadRemoteSettings();
     }
     this.wirePlatform();
+    this.wireLanguage();
     this.buildSettingsPanel();
     this.wire();
     this.refreshTitle();
@@ -202,13 +210,13 @@ class Game {
   }
 
   onContextLost() {
-    this.ui.toast('Graphics context lost — rebuilding…');
+    this.ui.toast(tr('Graphics context lost — rebuilding…'));
     setTimeout(() => {
       if (this.flat) return;
       try { this.buildRenderer(); } catch {
         this.flat = true;
         document.getElementById('playfield').classList.add('flat');
-        this.ui.toast('Recovered in compatibility mode; your progress is safe.');
+        this.ui.toast(tr('Recovered in compatibility mode; your progress is safe.'));
       }
     }, 600);
   }
@@ -236,14 +244,16 @@ class Game {
     try {
       const remote = await this.platform.cloudLoad();
       if (!remote) return;
-      // Remote wins on conflict: the cloud slot is the durable copy.
+      // Remote settings apply; progress is merged with this device's (best of
+      // both, nothing dropped), then the merged copy is mirrored back.
       this.platform.suspendSave(() => {
         if (remote.settings) { Object.assign(this.store.settings, remote.settings); migrateGraphics(this.store.settings); this.applyGraphics(); }
-        if (remote.progress) Object.assign(this.store.progress, remote.progress);
+        if (remote.progress) this.store.progress = mergeProgress(remote.progress, this.store.progress);
         this.store.saveSettings();
         this.store.saveProgress();
       });
-      this.ui.toast('Progress synced from your account.');
+      this.platform.scheduleCloudSave();
+      this.ui.toast(tr('Progress synced from your account.'));
     } catch (err) {
       console.warn('[cloud] load failed, keeping local progress', err);
     }
@@ -276,24 +286,34 @@ class Game {
   // StarHermit account buttons (sign-in on the hosted domain without a token,
   // invite when signed in), keyboard bindings and sign-out handling.
   wirePlatform() {
-    const t = currentPlatformStrings();
     const signIn = document.getElementById('btn-signin');
     const invite = document.getElementById('btn-invite');
-    signIn.textContent = t.signIn;
-    invite.textContent = t.invite;
+    const label = () => { signIn.textContent = ps().signIn; invite.textContent = ps().invite; };
+    label();
+    onLocaleChange(label);
     signIn.addEventListener('click', () => this.platform.signIn());
     invite.addEventListener('click', async () => {
       const link = this.platform.inviteLink();
       if (!link) return;
       try {
         await navigator.clipboard.writeText(link);
-        this.ui.toast(t.inviteCopied);
+        this.ui.toast(ps().inviteCopied);
       } catch {
-        this.ui.toast(t.inviteFailed.replace('{link}', link));
+        this.ui.toast(ps().inviteFailed.replace('{link}', link));
       }
     });
     this.platform.onAuthChange = ({ signedIn }) => {
-      if (!signedIn) this.ui.toast(t.signedOut);
+      if (!signedIn) this.ui.toast(ps().signedOut);
+      this.refreshTitle();
+    };
+    // Another device saved first: reload, merge (local settings and snapshot
+    // kept, best progress of both), save the merged document again.
+    this.platform.onSaveConflict = (remote) => {
+      this.platform.suspendSave(() => {
+        if (remote?.progress) this.store.progress = mergeProgress(remote.progress, this.store.progress);
+        this.store.saveProgress();
+      });
+      this.platform.scheduleCloudSave();
       this.refreshTitle();
     };
     this.platform.loadBindings(DEFAULT_BINDINGS).then((b) => {
@@ -379,6 +399,61 @@ class Game {
     document.getElementById('cells-grid').addEventListener('contextmenu', e => e.preventDefault());
   }
 
+  // Live language switching: static markup is re-applied by i18n.js; screens
+  // and panels built in code re-render in place. Rounds, timers and the
+  // settings panel's shared sections are left running.
+  wireLanguage() {
+    onLocaleChange(() => {
+      const ui = this.ui, p = this.store.progress;
+      this.refreshTitle();
+      ui.buildHelpControls(this.store.settings.gamepadMap);
+      switch (ui.current) {
+        case 'screen-modes': ui.buildModeList(p); break;
+        case 'screen-journey': ui.buildJourneyGrid(JOURNEY_STAGES, p); break;
+        case 'screen-learn': ui.buildLessonList(LESSONS, p); break;
+        case 'screen-practice': ui.buildPracticeList(PRACTICE_PRESETS, this.practiceBests()); break;
+        case 'screen-challenge': this.showChallenge(false); break;
+        case 'screen-scores': this.showScores(false); break;
+        case 'screen-results': if (this._results) this.renderResults(); break;
+        default: break;
+      }
+      if (this.session) {
+        this.updateHud();
+        this.updateRails();
+        ui.syncBoard(this.session.state);
+        this.refreshLessonBanner();
+      }
+      this.refreshLeaderboardLine();
+      if (document.getElementById('overlay-settings').classList.contains('active')) {
+        this.refreshNameHint();
+        this.buildGamepadMap();
+        this.buildGraphicsSection();
+      }
+    });
+  }
+
+  // Display label of a session (or saved snapshot) in the current language.
+  sessionLabel(s) {
+    if (!s) return '';
+    if (s.kind === 'journey' && s.spec) return tr('Journey {n}', { n: s.spec.index + 1 });
+    if (s.kind === 'daily' && s.spec) return tr('Daily Glow {date}', { date: s.spec.dateKey });
+    if (s.kind === 'practice') {
+      const preset = PRACTICE_PRESETS.find((x) => x.id === s.presetId);
+      return tr('Practice · {name}', { name: tr(preset ? preset.name : 'Custom') });
+    }
+    if (s.kind === 'challenge' && s.spec) return tr(s.spec.name);
+    if (s.kind === 'lesson') return tr('Lesson · {name}', { name: tr(s.lesson?.def?.name || '') });
+    return s.label || '';
+  }
+
+  practiceBests() {
+    const bests = {};
+    for (const e of this.store.progress.leaderboard) {
+      if (e.mode === 'practice') bests[e.presetId] = Math.max(bests[e.presetId] || 0, e.score);
+    }
+    return bests;
+  }
+
   setInputMode(mode) {
     this.ui.setInputMode(mode);
     this.store.settings.inputMode = mode;
@@ -392,20 +467,21 @@ class Game {
     const p = this.store.progress;
     const done = Object.values(p.journey).filter(j => j.completed).length;
     document.getElementById('journey-sub').textContent = done
-      ? `${done} of ${JOURNEY_STAGES.length} stages lit` : '40 stages of growing light';
+      ? tr('{done} of {total} stages lit', { done, total: JOURNEY_STAGES.length }) : tr('40 stages of growing light');
     const key = utcDateKey(new Date(this.now()));
     const todayDone = p.dailies[key];
     document.getElementById('daily-sub').textContent = todayDone
-      ? `Today: scored ${todayDone.score.toLocaleString()}` : 'One shared puzzle per UTC day';
+      ? tr('Today: scored {score}', { score: num(todayDone.score) }) : tr('One shared puzzle per UTC day');
     const name = this.platform.nickname || this.store.settings.profileName;
-    const cloudNote = {
-      loading: ' · syncing…', saving: ' · saving…',
-      synced: ' · cloud synced', error: ' · sync failed — kept on this device',
-    }[this.platform.syncState] || '';
+    const cloudKey = {
+      loading: 'syncing…', saving: 'saving…',
+      synced: 'cloud synced', error: 'sync failed — kept on this device',
+    }[this.platform.syncState];
+    const cloudNote = cloudKey ? ' · ' + tr(cloudKey) : '';
     document.getElementById('btn-signin').hidden = !this.platform.canSignIn();
     document.getElementById('btn-invite').hidden = !this.platform.inviteLink();
     document.getElementById('profile-line').textContent =
-      `${name ? name : 'Guest profile'} · progress saved on this device${this.hosted ? ` · connected${cloudNote}` : ' · offline'}`;
+      `${name ? name : tr('Guest profile')} · ${tr('progress saved on this device')}${this.hosted ? ` · ${tr('connected')}${cloudNote}` : ` · ${tr('offline')}`}`;
     // Resume affordance for the last safe snapshot.
     let resumeBtn = document.getElementById('btn-resume');
     if (p.lastSnapshot && !resumeBtn) {
@@ -418,7 +494,7 @@ class Game {
     if (resumeBtn) {
       if (p.lastSnapshot) {
         resumeBtn.hidden = false;
-        resumeBtn.textContent = `Resume ${p.lastSnapshot.label} (${formatMs(p.lastSnapshot.stateElapsed)})`;
+        resumeBtn.textContent = tr('Resume {label} ({time})', { label: this.sessionLabel(p.lastSnapshot), time: formatMs(p.lastSnapshot.stateElapsed) });
       } else resumeBtn.hidden = true;
     }
   }
@@ -436,25 +512,21 @@ class Game {
   }
 
   showPractice() {
-    const bests = {};
-    for (const e of this.store.progress.leaderboard) {
-      if (e.mode === 'practice') bests[e.presetId] = Math.max(bests[e.presetId] || 0, e.score);
-    }
-    this.ui.buildPracticeList(PRACTICE_PRESETS, bests);
+    this.ui.buildPracticeList(PRACTICE_PRESETS, this.practiceBests());
     this.ui.show('screen-practice');
   }
 
-  showChallenge() {
+  showChallenge(navigate = true) {
     const week = utcWeekKey(new Date(this.now()));
-    document.getElementById('challenge-week').textContent = `ranked · ${week}`;
+    document.getElementById('challenge-week').textContent = tr('ranked · {week}', { week });
     this.ui.buildChallengeList(challengeSpecs(week), this.store.progress);
-    this.ui.show('screen-challenge');
+    if (navigate) this.ui.show('screen-challenge');
   }
 
-  async showScores() {
+  async showScores(navigate = true) {
     const p = this.store.progress;
     const key = utcDateKey(new Date(this.now()));
-    const meName = this.platform.nickname || this.store.settings.profileName || 'You';
+    const meName = this.platform.nickname || this.store.settings.profileName || tr('You');
     let dailyEntries = [];
     let note = 'Local board (offline).';
     if (this.hosted) {
@@ -475,9 +547,9 @@ class Game {
     this.ui.showScores({
       dailyEntries, localEntries,
       achievements: p.achievements,
-      dailyNote: `${note} Streak: ${this.store.dailyStreak(key)} day(s).`,
+      dailyNote: `${tr(note)} ${tr('Streak: {n} day(s).', { n: this.store.dailyStreak(key) })}`,
     });
-    this.ui.show('screen-scores');
+    if (navigate) this.ui.show('screen-scores');
   }
 
   // ------------------------------------------------------------------ sessions
@@ -506,7 +578,7 @@ class Game {
   startDaily() {
     const key = utcDateKey(new Date(this.now()));
     if (this.store.progress.excludedDailies.includes(key)) {
-      this.ui.toast('Today’s board was marked defective and excluded from ranking — playing unranked.');
+      this.ui.toast(tr('Today’s board was marked defective and excluded from ranking — playing unranked.'));
     }
     this.session = this.makeSession('daily', dailySpec(key), `Daily Glow ${key}`);
     this.beginPlay();
@@ -555,9 +627,7 @@ class Game {
     this.audio.setSeed(s.state.seed);
     if (this.audio.ctx && !this.audio.started) this.audio.startMusic(s.puzzle.theme);
     this.ui.show('screen-play');
-    document.getElementById('rail-objective').textContent = this.objectiveText();
-    document.getElementById('rail-par').textContent = `Par ${formatMs(s.state.parMs)}`;
-    document.getElementById('rail-seed').textContent = `${s.puzzle.seed.toString(16)} · ${s.puzzle.rows}×${s.puzzle.cols} · ${s.puzzle.name}`;
+    this.updateRails();
 
     if (this.renderer) {
       this.renderer._applyTheme?.(themeById(s.puzzle.theme));
@@ -576,14 +646,22 @@ class Game {
     this.telemetry('round-start', { kind: s.kind, id: s.puzzle.id, rows: s.state.rows, cols: s.state.cols });
   }
 
+  updateRails() {
+    const s = this.session;
+    if (!s) return;
+    document.getElementById('rail-objective').textContent = this.objectiveText();
+    document.getElementById('rail-par').textContent = tr('Par {time}', { time: formatMs(s.state.parMs) });
+    document.getElementById('rail-seed').textContent = `${s.puzzle.seed.toString(16)} · ${s.puzzle.rows}×${s.puzzle.cols} · ${puzzleName(s.puzzle.name)}`;
+  }
+
   objectiveText() {
     const k = this.session.state.constraints;
-    const parts = ['Reveal the hidden picture.'];
-    if (k.timeLimitMs !== null) parts.push(`Finish within ${formatMs(k.timeLimitMs)}.`);
-    if (k.maxMistakes !== null) parts.push(`At most ${k.maxMistakes} mistakes.`);
-    if (k.moveLimit !== null) parts.push(`At most ${k.moveLimit} moves.`);
-    if (k.allowMarks === false) parts.push('Marks are disabled.');
-    if (k.allowHints === false) parts.push('Hints are disabled.');
+    const parts = [tr('Reveal the hidden picture.')];
+    if (k.timeLimitMs !== null) parts.push(tr('Finish within {time}.', { time: formatMs(k.timeLimitMs) }));
+    if (k.maxMistakes !== null) parts.push(tr('At most {n} mistakes.', { n: k.maxMistakes }));
+    if (k.moveLimit !== null) parts.push(tr('At most {n} moves.', { n: k.moveLimit }));
+    if (k.allowMarks === false) parts.push(tr('Marks are disabled.'));
+    if (k.allowHints === false) parts.push(tr('Hints are disabled.'));
     return parts.join(' ');
   }
 
@@ -601,7 +679,7 @@ class Game {
         this._tickAcc = 0;
         return;
       }
-      this.ui.countdown(steps[i]);
+      this.ui.countdown(steps[i] === 'Glow' ? tr('Glow') : steps[i]);
       this.audio.event(steps[i] === 'Glow' ? 'line' : 'countdown');
       i++;
       setTimeout(next, rm ? 500 : 620);
@@ -657,9 +735,16 @@ class Game {
       if (remaining === 0) { this.advanceLesson(); return; }
       L.reqCount = Math.min(L.reqCount ?? remaining, remaining);
     }
-    this.ui.lessonBanner(st.text, `${L.def.name} · step ${L.step + 1}/${L.def.steps.length}`);
-    this.ui.announce(st.text);
+    this.refreshLessonBanner();
+    this.ui.announce(tr(st.text));
     this.telemetry('tutorial-step', { lesson: L.def.id, step: L.step });
+  }
+
+  refreshLessonBanner() {
+    const L = this.session?.lesson;
+    if (!L || L.step < 0 || L.step >= L.def.steps.length) return;
+    const st = L.def.steps[L.step];
+    this.ui.lessonBanner(tr(st.text), tr('{lesson} · step {n}/{total}', { lesson: tr(L.def.name), n: L.step + 1, total: L.def.steps.length }));
   }
 
   countRemaining(req) {
@@ -695,7 +780,7 @@ class Game {
       (req.c === undefined || req.c === cmd.c);
     if (!match) {
       this.audio.event('error');
-      this.ui.toast('The lesson asks for a different move — follow the banner.');
+      this.ui.toast(tr('The lesson asks for a different move — follow the banner.'));
       return false;
     }
     return true;
@@ -754,7 +839,7 @@ class Game {
       'undo-disabled': 'Undo is not allowed in ranked play.',
       'nothing-to-reveal': 'Nothing left to reveal.',
     };
-    const msg = messages[reason] || `That move is not legal (${reason}).`;
+    const msg = messages[reason] ? tr(messages[reason]) : tr('That move is not legal ({reason}).', { reason });
     this.ui.announce(msg, true);
     this.ui.toast(msg);
     this.audio.event('error');
@@ -764,17 +849,19 @@ class Game {
     const s = this.session.state;
     for (const ev of events) {
       switch (ev.type) {
-        case 'fill': this.audio.event('fill'); if (this.store.settings.captions) this.ui.announce('Cell lit'); break;
+        case 'fill': this.audio.event('fill'); if (this.store.settings.captions) this.ui.announce(tr('Cell lit')); break;
         case 'mark': this.audio.event('mark'); break;
         case 'clear': this.audio.event('clear'); break;
         case 'restore': this.audio.event('undo'); break;
-        case 'propagate': this.audio.event('line'); this.ui.announce('A line resolved — certain cells crossed for you.'); break;
+        case 'propagate': this.audio.event('line'); this.ui.announce(tr('A line resolved — certain cells crossed for you.')); break;
         case 'mistake':
           this.audio.event('error');
-          this.ui.announce(`That cell is empty. Mistake ${s.mistakes}${s.constraints.maxMistakes !== null ? ` of ${s.constraints.maxMistakes}` : ''}.`, true);
-          if (this.store.settings.captions) this.ui.toast('✕ That cell is empty — mistake counted');
+          this.ui.announce(s.constraints.maxMistakes !== null
+            ? tr('That cell is empty. Mistake {n} of {max}.', { n: s.mistakes, max: s.constraints.maxMistakes })
+            : tr('That cell is empty. Mistake {n}.', { n: s.mistakes }), true);
+          if (this.store.settings.captions) this.ui.toast(tr('✕ That cell is empty — mistake counted'));
           break;
-        case 'hint': this.audio.event('hint'); this.ui.announce(`Hint revealed row ${ev.r + 1}, column ${ev.c + 1}.`); break;
+        case 'hint': this.audio.event('hint'); this.ui.announce(tr('Hint revealed row {r}, column {c}.', { r: ev.r + 1, c: ev.c + 1 })); break;
         case 'terminal': break; // handled by onTerminal
       }
     }
@@ -784,7 +871,7 @@ class Game {
     if (!this.session || this.phase !== 'active' || this.paused) return;
     const s = this.session.state;
     const snap = this.session.undoStack.pop();
-    if (!snap) { this.ui.toast('Nothing to undo.'); return; }
+    if (!snap) { this.ui.toast(tr('Nothing to undo.')); return; }
     const res = applyCommand(s, { type: 'restore', grid: snap });
     if (!res.ok) { this.explainInvalid(res.reason); return; }
     replayRecord(this.session.replayEnv, s, { type: 'restore', grid: snap }, res);
@@ -797,7 +884,7 @@ class Game {
   updateHud() {
     if (!this.session) return;
     const s = this.session.state;
-    this.ui.setHud(s, `${this.session.label} — ${this.session.puzzle.name}`, {
+    this.ui.setHud(s, `${this.sessionLabel(this.session)} — ${puzzleName(this.session.puzzle.name)}`, {
       canUndo: s.constraints.allowUndo && this.session.undoStack.length > 0 && s.status === STATUS.ACTIVE,
       canHint: s.constraints.allowHints && s.status === STATUS.ACTIVE,
     });
@@ -827,7 +914,7 @@ class Game {
     } else {
       if (this.hiddenAt && Date.now() - this.hiddenAt > 4000 && this.session) {
         const away = Math.round((Date.now() - this.hiddenAt) / 1000);
-        this.ui.toast(`Welcome back — away ${Math.floor(away / 60)}:${String(away % 60).padStart(2, '0')}. Solo play paused while you were gone.`);
+        this.ui.toast(tr('Welcome back — away {time}. Solo play paused while you were gone.', { time: `${Math.floor(away / 60)}:${String(away % 60).padStart(2, '0')}` }));
       }
       this.hiddenAt = null;
     }
@@ -874,7 +961,7 @@ class Game {
         presetId: snap.presetId,
       };
       this.beginPlay();
-      this.ui.toast('Restored your last safe snapshot.');
+      this.ui.toast(tr('Restored your last safe snapshot.'));
     } catch (err) {
       console.warn('snapshot restore failed', err);
       this.store.progress.lastSnapshot = null;
@@ -911,41 +998,43 @@ class Game {
       p.cleanStreak = 0;
     }
 
-    let progressText = '';
+    // Result texts are functions so a language change re-renders them.
+    let progressText = () => '';
     if (s.kind === 'journey') {
       const rec = this.store.recordJourney(s.spec.id, {
         score: comp.total, mistakes: st.mistakes, hints: st.hints,
         elapsedMs: st.elapsedMs, parMs: st.parMs, completed: won,
       });
       const stars = '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars);
-      progressText = `Stage stars: ${stars}. ${won && s.spec.mastery ? 'Mastery stage cleared.' : ''}`;
+      const mastered = won && s.spec.mastery;
+      progressText = () => tr('Stage stars: {stars}.', { stars }) + (mastered ? ' ' + tr('Mastery stage cleared.') : '');
       if (won && s.spec.mastery && this.grant('mastery')) unlocked.push('Mastery Bloom');
     } else if (s.kind === 'daily') {
       const key = s.spec.dateKey;
       if (won) {
         this.store.recordDaily(key, { score: comp.total, mistakes: st.mistakes, elapsedMs: st.elapsedMs, seed: st.seed.toString(16) });
         const streak = this.store.dailyStreak(key);
-        progressText = `Daily streak: ${streak} day(s).`;
+        progressText = () => tr('Daily streak: {n} day(s).', { n: streak });
         if (streak >= 7 && this.grant('daily-7')) unlocked.push('Week of Light');
-      } else progressText = 'The daily board keeps your best attempt — try again.';
+      } else progressText = () => tr('The daily board keeps your best attempt — try again.');
       if (won) this.platform.flushCloudSave(); // ranked result mirrored to the cloud slot
     } else if (s.kind === 'challenge') {
       const prev = p.challenges[s.spec.id];
       if (won && (!prev || comp.total > prev.score)) {
         p.challenges[s.spec.id] = { score: comp.total, mistakes: st.mistakes, elapsedMs: st.elapsedMs };
-        progressText = 'New personal best for this challenge.';
-      } else progressText = won ? 'Challenge complete.' : 'Challenge failed — the constraint held.';
+        progressText = () => tr('New personal best for this challenge.');
+      } else progressText = () => (won ? tr('Challenge complete.') : tr('Challenge failed — the constraint held.'));
       this.store.saveProgress();
       if (won) this.platform.flushCloudSave();
     } else if (s.kind === 'practice') {
       p.practicePlays++;
       this.store.saveProgress();
-      progressText = 'Practice is unranked — undo and hints were free.';
+      progressText = () => tr('Practice is unranked — undo and hints were free.');
     } else if (s.kind === 'lesson') {
       p.lessons[s.lesson.def.id] = true;
       this.store.saveProgress();
       const done = LESSONS.filter(l => p.lessons[l.id]).length;
-      progressText = `Lessons complete: ${done}/${LESSONS.length}.`;
+      progressText = () => tr('Lessons complete: {done}/{total}.', { done, total: LESSONS.length });
       this.ui.lessonBanner(null);
     }
 
@@ -953,7 +1042,7 @@ class Game {
 
     if (won && s.kind !== 'lesson') {
       this.store.addLeaderboard({
-        name: this.platform.nickname || this.store.settings.profileName || 'You',
+        name: this.platform.nickname || this.store.settings.profileName || tr('You'),
         score: comp.total, mistakes: st.mistakes, elapsedMs: st.elapsedMs,
         mode: s.kind, presetId: s.presetId, seed: st.seed.toString(16),
         ruleset: CONTENT_VERSION, date: new Date(this.now()).toISOString().slice(0, 10),
@@ -974,16 +1063,17 @@ class Game {
     const wait = this.store.settings.reducedMotion ? 350 : 2100;
     setTimeout(() => {
       this.phase = 'results';
-      const nextLabel = s.kind === 'journey' && won && s.spec.index < JOURNEY_STAGES.length - 1
-        ? `Next stage ${s.spec.index + 2}` : 'Continue';
-      this.ui.showResults({
+      const hasNext = s.kind === 'journey' && won && s.spec.index < JOURNEY_STAGES.length - 1;
+      this._results = {
         state: st, puzzle: s.puzzle,
-        modeLabel: `${MODE_INFO.find(m => m.id === s.kind)?.name || s.kind}${s.ranked ? ' · ranked' : ''}`,
-        sub: won
-          ? `“${s.puzzle.name}” in ${formatMs(st.elapsedMs)} with ${st.mistakes} mistake(s), ${st.hints} hint(s).`
-          : this.failText(st.reason),
-        progressText, achievements: unlocked, nextLabel,
-      });
+        modeLabel: () => `${tr(MODE_INFO.find(m => m.id === s.kind)?.name || 'Lesson')}${s.ranked ? ' · ' + tr('ranked') : ''}`,
+        sub: () => (won
+          ? tr('“{name}” in {time} with {mistakes} mistake(s), {hints} hint(s).', { name: puzzleName(s.puzzle.name), time: formatMs(st.elapsedMs), mistakes: st.mistakes, hints: st.hints })
+          : this.failText(st.reason)),
+        progressText, achievements: unlocked,
+        nextLabel: () => (hasNext ? tr('Next stage {n}', { n: s.spec.index + 2 }) : tr('Continue')),
+      };
+      this.renderResults();
       // Unlocks are listed on the results screen itself; a toast here would cover its buttons.
       this.audio.setMusicIntensity(0.3);
     }, wait);
@@ -991,27 +1081,46 @@ class Game {
 
   // Hosted play only: post a won journey, daily or challenge round to the
   // platform high-score board; the results Progress card shows the rank.
-  postToLeaderboard(total) {
-    const line = document.getElementById('result-lb');
-    const token = this.lbToken = {};
-    line.hidden = true;
-    if (total == null || !this.platform.hosted) return;
-    const t = currentPlatformStrings();
-    line.textContent = t.lbPosting;
-    line.hidden = false;
-    this.platform.submitScore(total).then((r) => {
-      if (token !== this.lbToken) return;
-      line.textContent = !r.posted ? t.lbFailed : r.rank ? t.lbRank.replace('{rank}', r.rank) : t.lbPosted;
+  renderResults() {
+    const r = this._results;
+    if (!r) return;
+    this.ui.showResults({
+      state: r.state, puzzle: r.puzzle, modeLabel: r.modeLabel(), sub: r.sub(),
+      progressText: r.progressText(), achievements: r.achievements.map((a) => tr(a)), nextLabel: r.nextLabel(),
     });
   }
 
+  postToLeaderboard(total) {
+    const line = document.getElementById('result-lb');
+    const token = this.lbToken = {};
+    this._lb = null;
+    line.hidden = true;
+    if (total == null || !this.platform.hosted) return;
+    this._lb = { state: 'posting' };
+    this.refreshLeaderboardLine();
+    this.platform.submitScore(total).then((r) => {
+      if (token !== this.lbToken) return;
+      this._lb = !r.posted ? { state: 'failed' } : r.rank ? { state: 'rank', rank: r.rank } : { state: 'posted' };
+      this.refreshLeaderboardLine();
+    });
+  }
+
+  refreshLeaderboardLine() {
+    const line = document.getElementById('result-lb');
+    if (!this._lb) return;
+    const s = ps();
+    line.hidden = false;
+    line.textContent = this._lb.state === 'posting' ? s.lbPosting : this._lb.state === 'failed' ? s.lbFailed
+      : this._lb.state === 'rank' ? s.lbRank.replace('{rank}', this._lb.rank) : s.lbPosted;
+  }
+
   failText(reason) {
-    return {
+    return tr({
       [REASON.MISTAKES]: 'Too many wrong cells — the board went dark.',
       [REASON.TIME]: 'Time ran out.',
       [REASON.MOVES]: 'The move budget ran out.',
       [REASON.ABANDONED]: 'Attempt abandoned.',
-    }[reason] || 'Attempt ended.';
+    }[reason] || 'Attempt ended.');
   }
 
   grant(key) { return this.store.unlockAchievement(key); }
@@ -1045,36 +1154,40 @@ class Game {
   buildSettingsPanel() {
     const s = this.store.settings;
     const body = document.getElementById('settings-body');
+    // Labels carry data-i18n so a language change relabels them in place.
+    const L = (key, cls = '') => `<span${cls ? ` class="${cls}"` : ''} data-i18n="${escapeHtml(key)}">${escapeHtml(tr(key))}</span>`;
     const row = (label, control, hint = '') => `
-      <div class="set-row"><label>${label}${hint ? `<span class="hint">${hint}</span>` : ''}</label>${control}</div>`;
-    const sel = (id, opts, val) => `<select id="${id}">${opts.map(([v, t]) => `<option value="${v}" ${v === val ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+      <div class="set-row"><label>${L(label)}${hint ? L(hint, 'hint') : ''}</label>${control}</div>`;
+    const sel = (id, opts, val) => `<select id="${id}">${opts.map(([v, k]) => `<option value="${v}" ${v === val ? 'selected' : ''} data-i18n="${escapeHtml(k)}">${escapeHtml(tr(k))}</option>`).join('')}</select>`;
     const chk = (id, val) => `<input type="checkbox" id="${id}" ${val ? 'checked' : ''} role="switch" aria-checked="${val}">`;
     const rng = (id, val) => `<input type="range" id="${id}" min="0" max="1" step="0.05" value="${val}">`;
 
+    const H = (key) => `<h3 class="set-group" data-i18n="${escapeHtml(key)}">${escapeHtml(tr(key))}</h3>`;
     body.innerHTML = `
-      <h3 class="set-group">Profile</h3>
-      ${row('Display name', `<input id="set-name" type="text" maxlength="24" value="${escapeHtml(this.platform.nickname || s.profileName)}" placeholder="Guest" ${this.platform.nickname ? 'disabled' : ''} style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px">`, this.platform.nickname ? `Signed in as ${escapeHtml(this.platform.nickname)} — the platform account name is shown.` : 'Shown on boards. Account sign-in is offered by the host when available.')}
-      <h3 class="set-group">Visual</h3>
+      ${H('Profile')}
+      <div class="set-row"><label>${L('Display name')}<span class="hint" id="set-name-hint"></span></label><input id="set-name" type="text" maxlength="24" value="${escapeHtml(this.platform.nickname || s.profileName)}" placeholder="${escapeHtml(tr('Guest'))}" data-i18n-placeholder="Guest" ${this.platform.nickname ? 'disabled' : ''} style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px"></div>
+      ${H('Visual')}
       ${row('Theme', sel('set-theme', THEMES.map(t => [t.id, t.name]), s.theme))}
       ${row('Palette', sel('set-palette', [['standard', 'Standard'], ['cvd', 'Color-vision safe']], s.palette), 'Marks always use shapes as well as color.')}
       ${row('Reduced motion', chk('set-motion', s.reducedMotion), 'No camera swoops, shake or large scaling.')}
       ${row('High contrast', chk('set-contrast', s.highContrast))}
       ${row('Larger text', chk('set-text', s.largeText))}
-      <div id="gfx-section"></div>
-      <h3 class="set-group">Audio</h3>
+      <div id="gfx-section" data-options-graphics><div id="gfx-inner"></div></div>
+      ${H('Audio')}
       ${row('Mute all', chk('set-mute', s.muted))}
       ${row('Music', rng('set-vol-music', s.volumes.music))}
       ${row('Effects', rng('set-vol-effects', s.volumes.effects))}
       ${row('Ambience', rng('set-vol-ambience', s.volumes.ambience))}
       ${row('Captions', chk('set-captions', s.captions), 'Text cues for meaningful audio.')}
-      <h3 class="set-group">Controls</h3>
+      ${H('Controls')}
       ${row('Left-handed tray', chk('set-lefty', s.leftHanded))}
       ${row('Hold to mark', chk('set-hold', s.holdToMark), 'When on, press-and-hold a cell to cross it (touch).')}
-      <h3 class="set-group">Gamepad</h3>
+      ${H('Gamepad')}
       <div id="gamepad-map"></div>
-      <h3 class="set-group">Privacy</h3>
+      ${H('Privacy')}
       ${row('Anonymous usage stats', chk('set-telemetry', s.consentTelemetry), 'Only funnel events: start, tutorial step, round end, retry, settings, errors.')}
-      <div class="set-row"><label>Replay tutorials<span class="hint">Reset lesson completion.</span></label><button id="set-reset-lessons" class="ghost">Reset</button></div>`;
+      <div class="set-row"><label>${L('Replay tutorials')}${L('Reset lesson completion.', 'hint')}</label><button id="set-reset-lessons" class="ghost" data-i18n="Reset">${escapeHtml(tr('Reset'))}</button></div>`;
+    this.refreshNameHint();
 
     const $ = (id) => document.getElementById(id);
     $('set-name').addEventListener('change', () => {
@@ -1105,15 +1218,25 @@ class Game {
     $('set-telemetry').addEventListener('change', () => { s.consentTelemetry = $('set-telemetry').checked; });
     $('set-reset-lessons').addEventListener('click', () => {
       this.store.progress.lessons = {}; this.store.saveProgress();
-      this.ui.toast('Lessons reset — replay them from Learn.');
+      this.ui.toast(tr('Lessons reset — replay them from Learn.'));
     });
     this.buildGamepadMap();
     this.buildGraphicsSection();
   }
 
+  refreshNameHint() {
+    const hint = document.getElementById('set-name-hint');
+    if (!hint) return;
+    hint.textContent = this.platform.nickname
+      ? tr('Signed in as {name} — the platform account name is shown.', { name: this.platform.nickname })
+      : tr('Shown on boards. Account sign-in is offered by the host when available.');
+  }
+
   // Graphics: quality preset, render scale, per-category overrides, toggles.
+  // Rebuilds only its own inner box (#gfx-inner); the shared Sound / Language /
+  // Report sections (game-options.js) mount after it in #gfx-section.
   buildGraphicsSection() {
-    const host = document.getElementById('gfx-section');
+    const host = document.getElementById('gfx-inner');
     if (!host) return;
     const T = this.gfxText;
     const saved = this.store.settings.graphics;
@@ -1136,7 +1259,7 @@ class Game {
     const chk = (id, key, val) => `<input type="checkbox" id="${id}" data-gfx="${key}" role="switch" ${val ? 'checked' : ''} aria-checked="${!!val}">`;
     host.innerHTML = `
       <h3 class="set-group" id="gfx-h">${escapeHtml(T.section)}</h3>
-      <div class="gfx-panel" role="group" aria-labelledby="gfx-h">
+      <div class="gfx-rows" role="group" aria-labelledby="gfx-h">
         ${row('gfx-preset', T.quality, presetSel, T.qualityHint)}
         ${row('gfx-scale', T.renderScale, scale, T.renderScaleHint)}
         ${cats}
@@ -1202,12 +1325,12 @@ class Game {
     if (!host) return;
     const actions = [['fill', 'Fill'], ['mark', 'Mark'], ['hint', 'Hint'], ['undo', 'Undo'], ['pause', 'Pause'], ['camera', 'Camera reset']];
     host.innerHTML = actions.map(([k, label]) => `
-      <div class="set-row"><label>${label}</label>
-      <button class="ghost" data-remap="${k}">Button ${map[k]}</button></div>`).join('');
+      <div class="set-row"><label>${escapeHtml(tr(label))}</label>
+      <button class="ghost" data-remap="${k}">${escapeHtml(this._remapTarget === k ? tr('Press a gamepad button…') : tr('Button {n}', { n: map[k] }))}</button></div>`).join('');
     host.querySelectorAll('[data-remap]').forEach(btn => {
       btn.addEventListener('click', () => {
         this._remapTarget = btn.dataset.remap;
-        btn.textContent = 'Press a gamepad button…';
+        btn.textContent = tr('Press a gamepad button…');
       });
     });
   }
@@ -1230,7 +1353,7 @@ class Game {
         this._remapTarget = null;
         this.buildGamepadMap();
         this.ui.buildHelpControls(map);
-        this.ui.toast(`Mapped to button ${idx}.`);
+        this.ui.toast(tr('Mapped to button {n}.', { n: idx }));
       }
     } else if (this.phase === 'active' && !this.paused) {
       // Focus navigation: dpad + left stick with repeat gating.
@@ -1369,6 +1492,6 @@ class Game {
 const game = new Game();
 game.boot().catch(err => {
   console.error('[boot]', err);
-  document.body.innerHTML = `<p style="padding:2em">Picture Logic failed to start: ${escapeHtml(err.message)}. Your saved progress is untouched.</p>`;
+  document.body.innerHTML = `<p style="padding:2em">${escapeHtml(tr('Picture Logic failed to start: {error}. Your saved progress is untouched.', { error: err.message }))}</p>`;
 });
 window.__pictureLogic = game; // debug/validation handle

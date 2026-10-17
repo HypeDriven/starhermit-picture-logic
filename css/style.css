@@ -422,7 +422,7 @@ button.card:hover { border-color: var(--accent); }
 .set-group { margin: 18px 0 6px; color: var(--accent); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.1em; }
 
 /* graphics settings */
-.gfx-panel .set-row select { max-width: 58%; min-width: 0; text-overflow: ellipsis; }
+.gfx-rows .set-row select { max-width: 58%; min-width: 0; text-overflow: ellipsis; }
 .gfx-scale { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; }
 .gfx-scale input[type="range"] { width: 130px; }
 .gfx-scale output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
@@ -430,10 +430,10 @@ button.card:hover { border-color: var(--accent); }
 .gfx-note { margin: 6px 0 0; color: var(--focus); }
 @media (max-width: 420px) {
   .gfx-scale input[type="range"] { width: 96px; }
-  .gfx-panel .set-row:has(select) { flex-wrap: wrap; gap: 6px; }
-  .gfx-panel .set-row:has(select) label { flex-basis: 100%; }
-  .gfx-panel .set-row select { max-width: 100%; flex: 1 1 100%; }
-  .gfx-panel .set-row { gap: 10px; }
+  .gfx-rows .set-row:has(select) { flex-wrap: wrap; gap: 6px; }
+  .gfx-rows .set-row:has(select) label { flex-basis: 100%; }
+  .gfx-rows .set-row select { max-width: 100%; flex: 1 1 100%; }
+  .gfx-rows .set-row { gap: 10px; }
 }
 #fps-meter {
   position: fixed;

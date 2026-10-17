@@ -17,6 +17,7 @@
 <script src="ui-scale.js"></script>
 <script src="starhermit-sdk.js"></script>
 <script>StarHermit.init();</script>
+<script src="sh-language.js"></script>
 </head>
 <body>
 <noscript><p style="padding:2em">Picture Logic needs JavaScript to run.</p></noscript>
@@ -28,33 +29,33 @@
       <div class="hero">
         <p class="dim small" id="title-version"></p>
         <h1 class="logo" id="title-h">Picture Logic</h1>
-        <p class="tagline">Read the clues. Light the cells. Watch the board bloom.</p>
-        <p><button id="btn-play" class="primary">Play</button></p>
+        <p class="tagline" data-i18n="Read the clues. Light the cells. Watch the board bloom.">Read the clues. Light the cells. Watch the board bloom.</p>
+        <p><button id="btn-play" class="primary" data-i18n="Play">Play</button></p>
         <div class="home-cards">
           <button class="card" id="card-daily">
-            <h3>Daily Glow</h3>
+            <h3 data-i18n="Daily Glow">Daily Glow</h3>
             <span class="dim small" id="daily-sub">One shared puzzle per UTC day</span>
-            <span class="cta">Today’s puzzle →</span>
+            <span class="cta" data-i18n="Today’s puzzle →">Today’s puzzle →</span>
           </button>
           <button class="card" id="card-journey">
-            <h3>Journey</h3>
+            <h3 data-i18n="Journey">Journey</h3>
             <span class="dim small" id="journey-sub">40 stages of growing light</span>
-            <span class="cta">Continue →</span>
+            <span class="cta" data-i18n="Continue →">Continue →</span>
           </button>
           <button class="card" id="card-learn">
-            <h3>Learn</h3>
-            <span class="dim small">Five short interactive lessons</span>
-            <span class="cta">Start lesson 1 →</span>
+            <h3 data-i18n="Learn">Learn</h3>
+            <span class="dim small" data-i18n="Five short interactive lessons">Five short interactive lessons</span>
+            <span class="cta" data-i18n="Start lesson 1 →">Start lesson 1 →</span>
           </button>
           <button class="card" id="card-scores">
-            <h3>Score Chase</h3>
-            <span class="dim small">Boards, streaks and achievements</span>
-            <span class="cta">Compare →</span>
+            <h3 data-i18n="Score Chase">Score Chase</h3>
+            <span class="dim small" data-i18n="Boards, streaks and achievements">Boards, streaks and achievements</span>
+            <span class="cta" data-i18n="Compare →">Compare →</span>
           </button>
         </div>
         <p class="small" style="margin-top:26px">
-          <button class="ghost" id="btn-settings">Settings</button>
-          <button class="ghost" id="btn-help">How to play</button>
+          <button class="ghost" id="btn-settings" data-i18n="Settings">Settings</button>
+          <button class="ghost" id="btn-help" data-i18n="How to play">How to play</button>
           <button class="ghost" id="btn-invite" hidden>Invite a friend</button>
           <button class="ghost" id="btn-signin" hidden>Sign in with StarHermit</button>
         </p>
@@ -66,8 +67,8 @@
   <!-- ============================== MODES ============================== -->
   <section id="screen-modes" class="screen" aria-labelledby="modes-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-title">← Back</button>
-      <h1 id="modes-h">Choose a mode</h1>
+      <button class="ghost back-btn" data-target="screen-title" data-i18n="← Back">← Back</button>
+      <h1 id="modes-h" data-i18n="Choose a mode">Choose a mode</h1>
       <div class="spacer"></div>
     </header>
     <div class="scroll"><div class="wrap">
@@ -78,13 +79,13 @@
   <!-- ============================== JOURNEY ============================== -->
   <section id="screen-journey" class="screen" aria-labelledby="journey-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-modes">← Modes</button>
-      <h1 id="journey-h">Journey</h1>
+      <button class="ghost back-btn" data-target="screen-modes" data-i18n="← Modes">← Modes</button>
+      <h1 id="journey-h" data-i18n="Journey">Journey</h1>
       <div class="spacer"></div>
       <span class="badge" id="journey-progress-badge"></span>
     </header>
     <div class="scroll"><div class="wrap">
-      <p class="dim">Forty authored light-boards. Mastery stages (gold) allow no hints. Earn up to three stars per stage: finish, finish clean, beat par.</p>
+      <p class="dim" data-i18n="Forty authored light-boards. Mastery stages (gold) allow no hints. Earn up to three stars per stage: finish, finish clean, beat par.">Forty authored light-boards. Mastery stages (gold) allow no hints. Earn up to three stars per stage: finish, finish clean, beat par.</p>
       <div class="stage-grid" id="stage-grid" role="list"></div>
     </div></div>
   </section>
@@ -92,26 +93,26 @@
   <!-- ============================== PRACTICE ============================== -->
   <section id="screen-practice" class="screen" aria-labelledby="practice-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-modes">← Modes</button>
-      <h1 id="practice-h">Practice</h1>
+      <button class="ghost back-btn" data-target="screen-modes" data-i18n="← Modes">← Modes</button>
+      <h1 id="practice-h" data-i18n="Practice">Practice</h1>
       <div class="spacer"></div>
-      <span class="badge">unranked</span>
+      <span class="badge" data-i18n="unranked">unranked</span>
     </header>
     <div class="scroll"><div class="wrap">
-      <p class="dim">Undo and hints are free here. Nothing affects your ratings. Seeds are shown so every board can be replayed and verified.</p>
+      <p class="dim" data-i18n="Undo and hints are free here. Nothing affects your ratings. Seeds are shown so every board can be replayed and verified.">Undo and hints are free here. Nothing affects your ratings. Seeds are shown so every board can be replayed and verified.</p>
       <div class="list" id="practice-list"></div>
       <div class="card" style="margin-top:16px">
-        <h3>Custom seed</h3>
-        <p class="dim small">Enter any text seed — the same seed always grows the same picture.</p>
+        <h3 data-i18n="Custom seed">Custom seed</h3>
+        <p class="dim small" data-i18n="Enter any text seed — the same seed always grows the same picture.">Enter any text seed — the same seed always grows the same picture.</p>
         <p style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="practice-seed" type="text" placeholder="e.g. firefly-7" style="flex:1;min-width:160px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px">
-          <select id="practice-size" aria-label="Board size">
+          <input id="practice-seed" type="text" placeholder="e.g. firefly-7" data-i18n-placeholder="e.g. firefly-7" style="flex:1;min-width:160px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px">
+          <select id="practice-size" aria-label="Board size" data-i18n-aria="Board size">
             <option value="8">8 × 8</option>
             <option value="10" selected>10 × 10</option>
             <option value="12">12 × 12</option>
             <option value="15">15 × 15</option>
           </select>
-          <button id="practice-seed-go" class="primary">Grow</button>
+          <button id="practice-seed-go" class="primary" data-i18n="Grow">Grow</button>
         </p>
       </div>
     </div></div>
@@ -120,13 +121,13 @@
   <!-- ============================== CHALLENGE ============================== -->
   <section id="screen-challenge" class="screen" aria-labelledby="challenge-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-modes">← Modes</button>
-      <h1 id="challenge-h">Challenges</h1>
+      <button class="ghost back-btn" data-target="screen-modes" data-i18n="← Modes">← Modes</button>
+      <h1 id="challenge-h" data-i18n="Challenges">Challenges</h1>
       <div class="spacer"></div>
       <span class="badge ranked" id="challenge-week"></span>
     </header>
     <div class="scroll"><div class="wrap">
-      <p class="dim">Constrained goals with fixed weekly seeds. Ranked: no undo, validated scores.</p>
+      <p class="dim" data-i18n="Constrained goals with fixed weekly seeds. Ranked: no undo, validated scores.">Constrained goals with fixed weekly seeds. Ranked: no undo, validated scores.</p>
       <div class="list" id="challenge-list"></div>
     </div></div>
   </section>
@@ -134,12 +135,12 @@
   <!-- ============================== LEARN ============================== -->
   <section id="screen-learn" class="screen" aria-labelledby="learn-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-modes">← Modes</button>
-      <h1 id="learn-h">Learn</h1>
+      <button class="ghost back-btn" data-target="screen-modes" data-i18n="← Modes">← Modes</button>
+      <h1 id="learn-h" data-i18n="Learn">Learn</h1>
       <div class="spacer"></div>
     </header>
     <div class="scroll"><div class="wrap">
-      <p class="dim">One rule at a time. You perform every action yourself — the board only accepts the move the lesson asks for.</p>
+      <p class="dim" data-i18n="One rule at a time. You perform every action yourself — the board only accepts the move the lesson asks for.">One rule at a time. You perform every action yourself — the board only accepts the move the lesson asks for.</p>
       <div class="list" id="lesson-list"></div>
     </div></div>
   </section>
@@ -147,17 +148,17 @@
   <!-- ============================== SCORES ============================== -->
   <section id="screen-scores" class="screen" aria-labelledby="scores-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-title">← Back</button>
-      <h1 id="scores-h">Score Chase</h1>
+      <button class="ghost back-btn" data-target="screen-title" data-i18n="← Back">← Back</button>
+      <h1 id="scores-h" data-i18n="Score Chase">Score Chase</h1>
       <div class="spacer"></div>
     </header>
     <div class="scroll"><div class="wrap">
-      <h2>Today’s board <span class="badge ranked">daily</span></h2>
+      <h2><span data-i18n="Today’s board">Today’s board</span> <span class="badge ranked" data-i18n="daily">daily</span></h2>
       <p class="dim small" id="scores-daily-note"></p>
       <div id="daily-board"></div>
-      <h2 style="margin-top:26px">Local bests</h2>
+      <h2 style="margin-top:26px" data-i18n="Local bests">Local bests</h2>
       <div id="local-board"></div>
-      <h2 style="margin-top:26px">Achievements</h2>
+      <h2 style="margin-top:26px" data-i18n="Achievements">Achievements</h2>
       <div class="help-grid" id="achv-grid"></div>
     </div></div>
   </section>
@@ -165,48 +166,48 @@
   <!-- ============================== HELP ============================== -->
   <section id="screen-help" class="screen" aria-labelledby="help-h">
     <header class="topbar">
-      <button class="ghost back-btn" data-target="screen-title">← Back</button>
-      <h1 id="help-h">How to play</h1>
+      <button class="ghost back-btn" data-target="screen-title" data-i18n="← Back">← Back</button>
+      <h1 id="help-h" data-i18n="How to play">How to play</h1>
       <div class="spacer"></div>
     </header>
     <div class="scroll"><div class="wrap">
-      <p>Every puzzle hides a pixel picture. The numbers beside each row and above each column are <strong>run clues</strong>: they tell you the lengths of the filled runs in that line, in order. A row clue of “2 1” means a run of two lit cells, at least one empty gap, then a single lit cell.</p>
+      <p data-i18n-html="help.intro">Every puzzle hides a pixel picture. The numbers beside each row and above each column are <strong>run clues</strong>: they tell you the lengths of the filled runs in that line, in order. A row clue of “2 1” means a run of two lit cells, at least one empty gap, then a single lit cell.</p>
       <div class="help-grid">
-        <div class="help-card"><h3>Light cells</h3><p>Tap or click a cell in <strong>Fill</strong> mode to light it. A wrong fill counts a mistake and shows you the cross instead.</p></div>
-        <div class="help-card"><h3>Cross empties</h3><p>Switch to <strong>Mark</strong> mode (or press <kbd>X</kbd>) to cross cells you know are empty. Crosses are notes — they never count as mistakes.</p></div>
-        <div class="help-card"><h3>Finish lines</h3><p>When every lit cell of a line is placed, the board crosses the rest of the line for you. Complete every lit cell to reveal the picture.</p></div>
-        <div class="help-card"><h3>Scoring</h3><p>Points for lit cells, finishing under par, and clean boards. Mistakes cost 50, hints cost 25. A flawless board earns +500.</p></div>
+        <div class="help-card"><h3 data-i18n="Light cells">Light cells</h3><p data-i18n-html="help.fill">Tap or click a cell in <strong>Fill</strong> mode to light it. A wrong fill counts a mistake and shows you the cross instead.</p></div>
+        <div class="help-card"><h3 data-i18n="Cross empties">Cross empties</h3><p data-i18n-html="help.mark">Switch to <strong>Mark</strong> mode (or press <kbd>X</kbd>) to cross cells you know are empty. Crosses are notes — they never count as mistakes.</p></div>
+        <div class="help-card"><h3 data-i18n="Finish lines">Finish lines</h3><p data-i18n="When every lit cell of a line is placed, the board crosses the rest of the line for you. Complete every lit cell to reveal the picture.">When every lit cell of a line is placed, the board crosses the rest of the line for you. Complete every lit cell to reveal the picture.</p></div>
+        <div class="help-card"><h3 data-i18n="Scoring">Scoring</h3><p data-i18n="Points for lit cells, finishing under par, and clean boards. Mistakes cost 50, hints cost 25. A flawless board earns +500.">Points for lit cells, finishing under par, and clean boards. Mistakes cost 50, hints cost 25. A flawless board earns +500.</p></div>
       </div>
-      <h2>Controls</h2>
+      <h2 data-i18n="Controls">Controls</h2>
       <div class="help-grid" id="controls-grid"></div>
     </div></div>
   </section>
 
   <!-- ============================== PLAY ============================== -->
   <section id="screen-play" class="screen" aria-labelledby="hud-objective">
-    <div id="hud" role="status" aria-label="Game status">
-      <div class="hud-item" id="hud-objective-wrap"><span class="k">Puzzle</span><span id="hud-objective">—</span></div>
-      <div class="hud-item"><span class="k">Time</span><span id="hud-time">0:00</span></div>
-      <div class="hud-item" id="hud-mistakes-wrap"><span class="k">Mistakes</span><span id="hud-mistakes">0</span></div>
-      <div class="hud-item" id="hud-moves-wrap"><span class="k">Moves</span><span id="hud-moves">0</span></div>
-      <div class="hud-item" id="hud-progress-wrap"><span class="k">Lit</span><span id="hud-progress">0%</span></div>
+    <div id="hud" role="status" aria-label="Game status" data-i18n-aria="Game status">
+      <div class="hud-item" id="hud-objective-wrap"><span class="k" data-i18n="Puzzle">Puzzle</span><span id="hud-objective">—</span></div>
+      <div class="hud-item"><span class="k" data-i18n="Time">Time</span><span id="hud-time">0:00</span></div>
+      <div class="hud-item" id="hud-mistakes-wrap"><span class="k" data-i18n="Mistakes">Mistakes</span><span id="hud-mistakes">0</span></div>
+      <div class="hud-item" id="hud-moves-wrap"><span class="k" data-i18n="Moves">Moves</span><span id="hud-moves">0</span></div>
+      <div class="hud-item" id="hud-progress-wrap"><span class="k" data-i18n="Lit">Lit</span><span id="hud-progress">0%</span></div>
       <div class="spacer"></div>
-      <button id="btn-pause" aria-label="Pause game">❚❚ Pause</button>
+      <button id="btn-pause" aria-label="Pause game" data-i18n-aria="Pause game" data-i18n="❚❚ Pause">❚❚ Pause</button>
     </div>
 
-    <aside class="rail" id="rail-left" aria-label="Objective and progress">
-      <div class="card"><h3>Objective</h3><p class="small dim" id="rail-objective">Reveal the hidden picture.</p></div>
-      <div class="card"><h3>Par</h3><p class="small" id="rail-par">—</p></div>
-      <div class="card"><h3>Seed</h3><p class="small dim" id="rail-seed">—</p></div>
+    <aside class="rail" id="rail-left" aria-label="Objective and progress" data-i18n-aria="Objective and progress">
+      <div class="card"><h3 data-i18n="Objective">Objective</h3><p class="small dim" id="rail-objective">Reveal the hidden picture.</p></div>
+      <div class="card"><h3 data-i18n="Par">Par</h3><p class="small" id="rail-par">—</p></div>
+      <div class="card"><h3 data-i18n="Seed">Seed</h3><p class="small dim" id="rail-seed">—</p></div>
     </aside>
 
     <div id="playfield">
       <canvas id="gl" aria-hidden="true"></canvas>
-      <div id="board-frame" role="group" aria-label="Puzzle board">
+      <div id="board-frame" role="group" aria-label="Puzzle board" data-i18n-aria="Puzzle board">
         <div id="corner-pad"></div>
         <div id="col-clues"></div>
         <div id="row-clues"></div>
-        <div id="cells-grid" role="grid" aria-label="Puzzle cells"></div>
+        <div id="cells-grid" role="grid" aria-label="Puzzle cells" data-i18n-aria="Puzzle cells"></div>
       </div>
       <div id="countdown" aria-hidden="true"><span class="num">3</span></div>
       <div id="lesson-banner" hidden>
@@ -215,30 +216,30 @@
       </div>
     </div>
 
-    <aside class="rail" id="rail-right" aria-label="Context actions">
-      <div class="card"><h3>Mode</h3>
-        <div class="seg" role="group" aria-label="Input mode" style="display:flex">
-          <button id="rail-mode-fill" aria-pressed="true">Fill</button>
-          <button id="rail-mode-mark" aria-pressed="false">Mark ✕</button>
+    <aside class="rail" id="rail-right" aria-label="Context actions" data-i18n-aria="Context actions">
+      <div class="card"><h3 data-i18n="Mode">Mode</h3>
+        <div class="seg" role="group" aria-label="Input mode" data-i18n-aria="Input mode" style="display:flex">
+          <button id="rail-mode-fill" aria-pressed="true" data-i18n="Fill">Fill</button>
+          <button id="rail-mode-mark" aria-pressed="false" data-i18n="Mark ✕">Mark ✕</button>
         </div>
       </div>
-      <div class="card"><h3>Actions</h3>
+      <div class="card"><h3 data-i18n="Actions">Actions</h3>
         <div class="btn-col" style="display:flex;flex-direction:column;gap:6px">
-          <button id="rail-hint">💡 Hint</button>
-          <button id="rail-undo">↩ Undo</button>
-          <button id="rail-camera">◎ Reset camera</button>
+          <button id="rail-hint" data-i18n="💡 Hint">💡 Hint</button>
+          <button id="rail-undo" data-i18n="↩ Undo">↩ Undo</button>
+          <button id="rail-camera" data-i18n="◎ Reset camera">◎ Reset camera</button>
         </div>
       </div>
     </aside>
 
-    <div id="tray" role="toolbar" aria-label="Play actions">
-      <div class="seg" role="group" aria-label="Input mode">
-        <button id="mode-fill" aria-pressed="true">▮ Fill</button>
-        <button id="mode-mark" aria-pressed="false">✕ Mark</button>
+    <div id="tray" role="toolbar" aria-label="Play actions" data-i18n-aria="Play actions">
+      <div class="seg" role="group" aria-label="Input mode" data-i18n-aria="Input mode">
+        <button id="mode-fill" aria-pressed="true" data-i18n="▮ Fill">▮ Fill</button>
+        <button id="mode-mark" aria-pressed="false" data-i18n="✕ Mark">✕ Mark</button>
       </div>
       <div class="sep"></div>
-      <button id="btn-hint">💡 Hint</button>
-      <button id="btn-undo">↩ Undo</button>
+      <button id="btn-hint" data-i18n="💡 Hint">💡 Hint</button>
+      <button id="btn-undo" data-i18n="↩ Undo">↩ Undo</button>
       <button id="btn-camera">◎</button>
     </div>
   </section>
@@ -252,21 +253,21 @@
         <p class="dim" id="result-sub"></p>
       </div>
       <div class="card">
-        <table class="score-table" id="score-table" aria-label="Score breakdown"></table>
+        <table class="score-table" id="score-table" aria-label="Score breakdown" data-i18n-aria="Score breakdown"></table>
       </div>
       <div class="card" style="margin-top:12px" id="result-progress-card">
-        <h3>Progress</h3>
+        <h3 data-i18n="Progress">Progress</h3>
         <p class="small" id="result-progress"></p>
         <p class="small" id="result-lb" aria-live="polite" hidden></p>
       </div>
       <div class="card" style="margin-top:12px" id="result-achv-card" hidden>
-        <h3>Achievements unlocked</h3>
+        <h3 data-i18n="Achievements unlocked">Achievements unlocked</h3>
         <p class="small" id="result-achv"></p>
       </div>
       <div class="btn-col" style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
         <button class="primary" id="result-next">Next</button>
-        <button id="result-retry">Retry this puzzle</button>
-        <button class="ghost" id="result-exit">Back to title</button>
+        <button id="result-retry" data-i18n="Retry this puzzle">Retry this puzzle</button>
+        <button class="ghost" id="result-exit" data-i18n="Back to title">Back to title</button>
       </div>
     </div></div>
   </section>
@@ -274,14 +275,14 @@
   <!-- ============================== PAUSE ============================== -->
   <div class="overlay" id="overlay-pause" role="dialog" aria-modal="true" aria-labelledby="pause-h">
     <div class="sheet">
-      <h2 id="pause-h">Paused</h2>
-      <p class="dim small" id="pause-sub">The board waits for you.</p>
+      <h2 id="pause-h" data-i18n="Paused">Paused</h2>
+      <p class="dim small" id="pause-sub" data-i18n="The board waits for you.">The board waits for you.</p>
       <div class="btn-col">
-        <button class="primary" id="pause-resume">Resume</button>
-        <button id="pause-restart">Restart puzzle</button>
-        <button id="pause-settings">Settings</button>
-        <button id="pause-help">How to play</button>
-        <button class="ghost" id="pause-leave">Leave puzzle</button>
+        <button class="primary" id="pause-resume" data-i18n="Resume">Resume</button>
+        <button id="pause-restart" data-i18n="Restart puzzle">Restart puzzle</button>
+        <button id="pause-settings" data-i18n="Settings">Settings</button>
+        <button id="pause-help" data-i18n="How to play">How to play</button>
+        <button class="ghost" id="pause-leave" data-i18n="Leave puzzle">Leave puzzle</button>
       </div>
     </div>
   </div>
@@ -289,10 +290,10 @@
   <!-- ============================== SETTINGS ============================== -->
   <div class="overlay" id="overlay-settings" role="dialog" aria-modal="true" aria-labelledby="settings-h">
     <div class="sheet" style="max-width:640px">
-      <h2 id="settings-h">Settings</h2>
+      <h2 id="settings-h" data-i18n="Settings">Settings</h2>
       <div class="scroll" style="padding:0;overflow-y:auto" id="settings-body"></div>
       <div class="btn-col">
-        <button class="primary" id="settings-close">Done</button>
+        <button class="primary" id="settings-close" data-i18n="Done">Done</button>
       </div>
     </div>
   </div>

@@ -19,6 +19,7 @@ export class Platform {
     this.docProvider = null;  // () => doc to cloud-save (wired by the game)
     this.onSyncChange = null; // syncState display hook
     this.onAuthChange = null; // ({ signedIn }) after the platform session ends
+    this.onSaveConflict = null; // (remoteDoc|null) after another device saved first
     this._suspended = false;  // suppress saves while applying a remote doc
     this._sentSettings = {};  // key -> JSON last mirrored to the settings KV
   }
@@ -34,6 +35,13 @@ export class Platform {
     if (!sh) return;
     if (!sh.signedIn) sh.init();
     sh.on('saved', (ok) => this.setSync(ok ? 'synced' : 'error'));
+    // A conditional cloud write lost to another device: reload the newer doc
+    // (which lifts the SDK's write block) and let the game merge and re-save.
+    sh.on('saveconflict', async () => {
+      let remote = null;
+      try { remote = await sh.loadJSON(); } catch { remote = null; }
+      this.onSaveConflict?.(remote && typeof remote === 'object' ? remote : null);
+    });
     sh.on('auth', (a) => {
       if (!a.signedIn) { this.nickname = null; this.setSync('offline'); }
       this.onAuthChange?.({ signedIn: !!a.signedIn });
@@ -122,7 +130,7 @@ export class Platform {
     if (!this.hosted) return {};
     const s = (await sdk().getSettings()) || {};
     this._settingsLoaded = true; // no PATCH before the platform values were read
-    for (const [k, v] of Object.entries(s)) this._sentSettings[k] = JSON.stringify(v);
+    for (const [k, v] of Object.entries(s)) if (!k.startsWith('ui.')) this._sentSettings[k] = JSON.stringify(v);
     return s;
   }
 
@@ -131,6 +139,7 @@ export class Platform {
     if (!this.hosted || !this._settingsLoaded || this._suspended) return Promise.resolve(null);
     const patch = {};
     for (const [k, v] of Object.entries(prefs || {})) {
+      if (k.startsWith('ui.')) continue; // platform-owned keys (ui.language) are not game settings
       const json = JSON.stringify(v);
       if (this._sentSettings[k] !== json) { patch[k] = v; this._sentSettings[k] = json; }
     }
