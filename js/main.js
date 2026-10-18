@@ -13,7 +13,7 @@ import {
   challengeSpecs, utcWeekKey, PRACTICE_PRESETS, LESSONS, buildPuzzle, puzzleHash,
 } from './content.js';
 import { Store, ACHIEVEMENTS, migrateGraphics, DEFAULT_SETTINGS, mergeProgress } from './store.js';
-import { PRESETS, CATEGORIES, autoPreset, resolve, choosePreset, presetTier, describe } from './gfx.js';
+import { PRESETS, CATEGORIES, detectLevel, presetForLevel, resolve, choosePreset, presetTier, describe } from './gfx.js';
 import { gfxStrings } from './gfx-strings.js';
 import { UI, MODE_INFO, formatMs, escapeHtml, FALLBACK_BINDINGS as DEFAULT_BINDINGS } from './ui.js';
 import { AudioEngine } from './audio.js';
@@ -149,8 +149,18 @@ class Game {
   }
 
   resolveGraphics() {
-    this.gfxAuto = autoPreset(this.gpu, this.isMobileDevice());
-    return resolve(this.store.settings.graphics, this.gfxAuto);
+    if (this.gpuLevel == null || this._levelGpu !== this.gpu) {
+      this._levelGpu = this.gpu;
+      // StarHermit hardware level (js/gpu-level.js): renderer string + device facts (phone/tablet, cores, memory).
+      let sys = { mobile: this.isMobileDevice() };
+      try {
+        const G = globalThis.StarHermitGpu;
+        if (G) { const d = G.detectSystem(); sys = { ...d, mobile: sys.mobile || d.mobile }; }
+      } catch { /* defaults */ }
+      this.gpuLevel = detectLevel(this.gpu, sys);
+    }
+    this.gfxAuto = presetForLevel(this.gpuLevel);
+    return resolve(this.store.settings.graphics, this.gfxAuto, this.gpuLevel);
   }
 
   // Apply graphics settings live: body data attributes (DOM effects + tests),
@@ -1304,7 +1314,7 @@ class Game {
     this.refreshGraphicsSummary();
   }
 
-  // "GPU name · cost summary · W×H px", plus a note when post-processing failed.
+  // "GPU name · Level N · cost summary · W×H px", plus a note when post-processing failed.
   refreshGraphicsSummary() {
     const el = document.getElementById('gfx-summary');
     if (!el) return;
@@ -1312,7 +1322,7 @@ class Game {
     const info = this.renderer?.graphicsInfo();
     const g = this.gfx || this.resolveGraphics();
     const px = info && info.pixels[0] ? info.pixels : null;
-    el.textContent = [this.gpu || T.unknownGpu, describe(g, px, T.words)].join(' · ');
+    el.textContent = [this.gpu || T.unknownGpu, T.level.replace('{n}', this.gpuLevel ?? 0), describe(g, px, T.words)].join(' · ');
     const note = document.getElementById('gfx-note');
     const msg = this.flat ? T.flat : info?.postFailed ? T.postFailed : '';
     note.hidden = !msg;

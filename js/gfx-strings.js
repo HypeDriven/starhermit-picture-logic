@@ -26,7 +26,7 @@ const en = {
   showFps: 'Show frame rate',
   postFailed: 'Post-processing is unavailable on this device; effects that need it are skipped.',
   flat: '3D is unavailable in this browser; graphics settings apply once it is.',
-  unknownGpu: 'unknown GPU',
+  unknownGpu: 'unknown GPU', level: 'Level {n}',
   words: { noShadows: 'no shadows', shadows: '{n}² shadows', ao: 'ambient occlusion', aoHigh: 'full ambient occlusion', bloom: 'bloom', reflections: 'reflections', noAa: 'no anti-aliasing' },
 };
 
@@ -60,7 +60,7 @@ const es = {
   showFps: 'Mostrar fotogramas por segundo',
   postFailed: 'El posprocesado no está disponible en este dispositivo; se omiten los efectos que lo necesitan.',
   flat: 'El 3D no está disponible en este navegador; los ajustes se aplicarán cuando lo esté.',
-  unknownGpu: 'GPU desconocida',
+  unknownGpu: 'GPU desconocida', level: 'Nivel {n}',
   words: { noShadows: 'sin sombras', shadows: 'sombras {n}²', ao: 'oclusión ambiental', aoHigh: 'oclusión ambiental completa', bloom: 'resplandor', reflections: 'reflejos', noAa: 'sin suavizado' },
 };
 
@@ -94,7 +94,7 @@ const de = {
   showFps: 'Bildrate anzeigen',
   postFailed: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar; Effekte, die sie brauchen, entfallen.',
   flat: '3D ist in diesem Browser nicht verfügbar; die Einstellungen gelten, sobald es verfügbar ist.',
-  unknownGpu: 'unbekannte GPU',
+  unknownGpu: 'unbekannte GPU', level: 'Stufe {n}',
   words: { noShadows: 'keine Schatten', shadows: '{n}²-Schatten', ao: 'Umgebungsverdeckung', aoHigh: 'volle Umgebungsverdeckung', bloom: 'Leuchten', reflections: 'Spiegelungen', noAa: 'keine Kantenglättung' },
 };
 
@@ -122,7 +122,7 @@ const fr = {
   showFps: 'Afficher les images par seconde',
   postFailed: 'Le post-traitement n’est pas disponible sur cet appareil ; les effets qui en ont besoin sont ignorés.',
   flat: 'La 3D n’est pas disponible dans ce navigateur ; les réglages s’appliqueront dès qu’elle le sera.',
-  unknownGpu: 'GPU inconnu',
+  unknownGpu: 'GPU inconnu', level: 'Niveau {n}',
   words: { noShadows: 'sans ombres', shadows: 'ombres {n}²', ao: 'occlusion ambiante', aoHigh: 'occlusion ambiante complète', bloom: 'halo', reflections: 'reflets', noAa: 'sans anticrénelage' },
 };
 
@@ -157,7 +157,7 @@ const ptBR = {
   showFps: 'Mostrar taxa de quadros',
   postFailed: 'O pós-processamento não está disponível neste aparelho; os efeitos que dependem dele são ignorados.',
   flat: 'O 3D não está disponível neste navegador; os ajustes valerão quando estiver.',
-  unknownGpu: 'GPU desconhecida',
+  unknownGpu: 'GPU desconhecida', level: 'Nível {n}',
   words: { noShadows: 'sem sombras', shadows: 'sombras {n}²', ao: 'oclusão de ambiente', aoHigh: 'oclusão de ambiente completa', bloom: 'brilho', reflections: 'reflexos', noAa: 'sem suavização' },
 };
 
@@ -185,7 +185,7 @@ const it = {
   showFps: 'Mostra fotogrammi al secondo',
   postFailed: 'La post-elaborazione non è disponibile su questo dispositivo; gli effetti che la richiedono vengono saltati.',
   flat: 'Il 3D non è disponibile in questo browser; le impostazioni si applicheranno quando lo sarà.',
-  unknownGpu: 'GPU sconosciuta',
+  unknownGpu: 'GPU sconosciuta', level: 'Livello {n}',
   words: { noShadows: 'senza ombre', shadows: 'ombre {n}²', ao: 'occlusione ambientale', aoHigh: 'occlusione ambientale completa', bloom: 'bagliore', reflections: 'riflessi', noAa: 'senza antialiasing' },
 };
 

@@ -18,7 +18,7 @@ import { RoomEnvironment } from './vendor/addons/environments/RoomEnvironment.js
 import { RoundedBoxGeometry } from './vendor/addons/geometries/RoundedBoxGeometry.js';
 import { Rng } from './prng.js';
 import { CELL } from './rules.js';
-import { SHADOW_MAP, PARTICLE_POOL, MOTE_COUNT } from './gfx.js';
+import { SHADOW_MAP, budgetFor, particleCounts } from './gfx.js';
 
 // Framing constants (no magic offsets scattered through the code).
 export const FRAMING = {
@@ -38,9 +38,18 @@ export const FRAMING = {
 const LOW_GFX = {
   preset: 'low', auto: true, cap: 1, scale: 1, shadows: 'off', ao: 'off', bloom: 'off', grade: 'off',
   antialias: 'off', reflections: 'off', particles: 'low', background: 'static', detail: 'plain',
-  adaptive: true, showFps: false, post: false, canvasMsaa: false,
+  adaptive: true, showFps: false, post: false, canvasMsaa: false, level: 0, budget: budgetFor('low', 0),
 };
-const FLORA_COUNT = { plain: 3, detailed: 12 };
+const FLORA_PLAIN = 3; // flora pieces with Board detail plain; detailed uses the preset's budget
+
+// Run a post pass at a fraction of the frame: EffectComposer.addPass/setSize hand every pass the full
+// frame size, so the pass's own setSize applies the budget's scale (half-res bloom/GTAO below Ultra).
+function atScale(pass, k) {
+  if (!(k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
+}
 
 // Colour grade + vignette, applied after OutputPass (display-space in and out).
 const GradeShader = {
@@ -105,9 +114,12 @@ function makeSpriteTexture() {
 }
 
 // Fine mottled grain for the slab (tinted by the material colour).
-function makeGrainTexture() {
+// Authored at 256 px and drawn into the preset's grain budget.
+function makeGrainTexture(size = 256) {
   const rng = new Rng(0x51AB, 'decor');
-  const t = canvasTexture(256, (g, n) => {
+  const t = canvasTexture(size, (g, size) => {
+    const n = 256;
+    g.scale(size / n, size / n);
     g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, n, n);
     for (let i = 0; i < 5200; i++) {
       const v = 190 + Math.floor(rng.float() * 65);
@@ -244,7 +256,7 @@ export class BoardRenderer {
     this.ground.position.y = -0.55;
     this.scene.add(this.ground);
     this._groundTex = makeGroundTexture();
-    this._grainTex = makeGrainTexture();
+    this._grainSize = 0; // built at the preset's grain budget in setGraphics
 
     this.scene.fog = new THREE.Fog(0x2a3550, 26, 70);
     this.floraGroup = new THREE.Group();
@@ -280,9 +292,18 @@ export class BoardRenderer {
     this.scene.environment = ibl ? this._envMap() : null;
     this.hemi.intensity = ibl ? 0.5 : 0.85;
     this.keyLight.intensity = ibl ? 2.05 : 2.6;
-    if (PARTICLE_POOL[g.particles] !== this.pMax) this._buildParticles();
+    if (particleCounts(g).pool !== this.pMax) this._buildParticles();
     this._buildMotes();
-    if (!prev || prev.detail !== g.detail) this._applyDetail();
+    // Asset variants for the preset's budget: grain texture size, cell shading model and bevel segments.
+    const b = g.budget, pb = prev?.budget;
+    if (this._grainSize !== b.grain) {
+      this._grainTex?.dispose();
+      this._grainTex = makeGrainTexture(b.grain);
+      this._grainSize = b.grain;
+    }
+    const assetsChanged = !!pb && (pb.material !== b.material || pb.bevel !== b.bevel || pb.grain !== b.grain || pb.flora !== b.flora);
+    if (assetsChanged && this.cells) this._buildCellAssets();
+    if (!prev || prev.detail !== g.detail || assetsChanged) this._applyDetail();
     this._applyShadowFlags();
     // Materials pick up shadow/environment changes on recompile.
     this.scene.traverse(o => {
@@ -376,11 +397,11 @@ export class BoardRenderer {
         ao.blendIntensity = 0.75;
         ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.4, thickness: 1.2, scale: 1.0, samples: g.ao === 'high' ? 16 : 8 });
         ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: g.ao === 'high' ? 6 : 4, rings: 2, samples: g.ao === 'high' ? 16 : 8 });
-        composer.addPass(ao);
+        composer.addPass(atScale(ao, g.budget.aoRes));
       }
       if (g.bloom === 'on') {
         // High threshold: only lit cells, the light rim and glowing flora bloom.
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.4, 0.45, 0.85));
+        composer.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.4, 0.45, 0.85), g.budget.bloomRes));
       }
       composer.addPass(new OutputPass());
       if (g.grade === 'on') composer.addPass(new ShaderPass(GradeShader));
@@ -436,7 +457,7 @@ export class BoardRenderer {
   // -------------------------------------------------------------------------
 
   _buildMotes() {
-    const n = MOTE_COUNT[this.gfx?.particles] || MOTE_COUNT.low;
+    const n = particleCounts(this.gfx).motes;
     const on = this.gfx?.background === 'animated';
     if (this.motes && this.motes.userData.n === n) {
       this.motes.visible = on;
@@ -515,7 +536,7 @@ export class BoardRenderer {
     this.floraGroup.clear();
     const rng = new Rng((this.boardSeed ?? 7) ^ 0xF10A, 'decor');
     const detailed = this.gfx?.detail === 'detailed';
-    const n = FLORA_COUNT[detailed ? 'detailed' : 'plain'];
+    const n = detailed ? this.gfx.budget.flora : FLORA_PLAIN;
     const radius = () => Math.max(this.cols || 8, this.rows || 8) * 0.72 + 2.2;
     for (let i = 0; i < n; i++) {
       const ang = (i / n) * Math.PI * 2 + rng.float() * 0.5;
@@ -549,17 +570,8 @@ export class BoardRenderer {
     // setting swaps geometry/material in place without touching cell state.
     this.glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(rows * cols), 1);
     this.glowAttr.setUsage(THREE.DynamicDrawUsage);
-    this.cellGeoPlain = new THREE.BoxGeometry(0.84, 0.34, 0.84);
-    this.cellGeoDetailed = new RoundedBoxGeometry(0.84, 0.34, 0.84, 3, 0.07);
-    this.cellGeoPlain.setAttribute('aGlow', this.glowAttr);
-    this.cellGeoDetailed.setAttribute('aGlow', this.glowAttr);
-    this.cellMatPlain = patchCellGlow(new THREE.MeshStandardMaterial({
-      color: 0xffffff, roughness: 0.45, metalness: 0.05, emissive: 0xffffff,
-    }));
-    this.cellMatDetailed = patchCellGlow(new THREE.MeshPhysicalMaterial({
-      color: 0xffffff, roughness: 0.38, metalness: 0.02, emissive: 0xffffff,
-      clearcoat: 0.7, clearcoatRoughness: 0.22, envMapIntensity: 0.4,
-    }));
+    this.cells = null;
+    this._buildCellAssets();
     const detailed = this.gfx.detail === 'detailed';
     this.cellMat = detailed ? this.cellMatDetailed : this.cellMatPlain;
     this.cells = new THREE.InstancedMesh(detailed ? this.cellGeoDetailed : this.cellGeoPlain, this.cellMat, rows * cols);
@@ -591,6 +603,33 @@ export class BoardRenderer {
       this._startTransition({ ...to, dist: dist * 1.35, pitch: Math.min(1.35, to.pitch + 0.35) }, to, FRAMING.introDuration, easeOutCubic);
     }
     this._updateCamera();
+  }
+
+  // Cell geometry and materials for the preset's budget: bevel segments on detailed cells; Lambert on
+  // Low, Standard on Balanced (and for plain cells), clear-coated Physical on High/Ultra. The cell box
+  // (0.84 × 0.34 × 0.84) and the shared per-instance glow attribute are the same on every preset.
+  _buildCellAssets() {
+    const b = this.gfx.budget;
+    const old = [this.cellGeoPlain, this.cellGeoDetailed, this.cellMatPlain, this.cellMatDetailed];
+    this.cellGeoPlain = new THREE.BoxGeometry(0.84, 0.34, 0.84);
+    this.cellGeoDetailed = new RoundedBoxGeometry(0.84, 0.34, 0.84, b.bevel, 0.07);
+    this.cellGeoPlain.setAttribute('aGlow', this.glowAttr);
+    this.cellGeoDetailed.setAttribute('aGlow', this.glowAttr);
+    const lambert = () => new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff });
+    const standard = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.05, emissive: 0xffffff });
+    this.cellMatPlain = patchCellGlow(b.material === 'lambert' ? lambert() : standard());
+    this.cellMatDetailed = patchCellGlow(b.material === 'lambert' ? lambert()
+      : b.material === 'standard' ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.02, emissive: 0xffffff, envMapIntensity: 0.4 })
+        : new THREE.MeshPhysicalMaterial({
+          color: 0xffffff, roughness: 0.38, metalness: 0.02, emissive: 0xffffff,
+          clearcoat: 0.7, clearcoatRoughness: 0.22, envMapIntensity: 0.4,
+        }));
+    if (this.cells) {
+      const detailed = this.gfx.detail === 'detailed';
+      this.cells.geometry = detailed ? this.cellGeoDetailed : this.cellGeoPlain;
+      this.cells.material = this.cellMat = detailed ? this.cellMatDetailed : this.cellMatPlain;
+    }
+    for (const o of old) o?.dispose();
   }
 
   // Slab the cells sit in; detailed adds bevels, grain and a thin light rim.
@@ -731,7 +770,7 @@ export class BoardRenderer {
 
   _buildParticles() {
     if (this.points) { this.scene.remove(this.points); this.pGeo.dispose(); this.points.material.dispose(); }
-    const max = PARTICLE_POOL[this.gfx?.particles] || PARTICLE_POOL.low;
+    const max = particleCounts(this.gfx).pool;
     this.pMax = max;
     this.pPos = new Float32Array(max * 3);
     this.pVel = new Float32Array(max * 3);

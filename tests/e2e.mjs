@@ -345,6 +345,7 @@ async function graphicsPass(browser, name, ctxOpts) {
     await page.selectOption('#gfx-preset', 'low');
     await page.waitForFunction(() => document.body.dataset.gfxChoice === 'low');
     if (!/no shadows/.test(await page.textContent('#gfx-summary'))) throw new Error('summary does not reflect Low');
+    if (!/ · Level 0 · /.test(await page.textContent('#gfx-summary'))) throw new Error('summary lacks the hardware level');
     await page.selectOption('#gfx-preset', 'ultra');
     await page.waitForFunction(() => document.body.dataset.gfxPreset === 'ultra');
     let rg = await rendererGfx();
