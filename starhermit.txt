@@ -1,9 +1,27 @@
 name=Picture Logic
 description=Use row and column clues to fill a grid and reveal hidden pixel pictures in nonogram puzzles.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.19.2
+engine.minor=20
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# The board is also played with the pointer or touch: tap or click a cell to
+# fill or mark it (by the Fill / Mark mode), drag to paint a stroke, right-
+# click to mark, or hold a cell to mark it (Settings › Hold to mark); every
+# action also has a button in the tray.
+engine.group.cursor_up=Board
 control.cursor_up=ArrowUp | Move cursor up
 control.cursor_down=ArrowDown | Move cursor down
 control.cursor_left=ArrowLeft | Move cursor left
@@ -11,7 +29,25 @@ control.cursor_right=ArrowRight | Move cursor right
 control.fill=Enter+NumpadEnter+Space+KeyZ | Fill cell
 control.mark=KeyX+KeyM | Mark cell
 control.clear=KeyC+Backspace+Delete | Clear cell
+engine.group.hint=Round
 control.hint=KeyH | Hint
 control.undo=KeyU | Undo
-control.pause=KeyP+Escape | Pause
+control.pause=KeyP+Escape | Pause / back
 control.camera=KeyR | Reset camera
+
+# Gamepad defaults (the browser build's gamepad map: A fills, X marks, Y
+# hints, LB undoes, Start pauses, Back resets the camera; the D-pad or left
+# stick moves the cursor): South fills, West marks, East clears a mark,
+# North hints, the left shoulder undoes, Start pauses, Select resets the
+# camera.
+engine.gamepad.cursor_up=DpadUp+LeftStickUp
+engine.gamepad.cursor_down=DpadDown+LeftStickDown
+engine.gamepad.cursor_left=DpadLeft+LeftStickLeft
+engine.gamepad.cursor_right=DpadRight+LeftStickRight
+engine.gamepad.fill=South
+engine.gamepad.mark=West
+engine.gamepad.clear=East
+engine.gamepad.hint=North
+engine.gamepad.undo=LeftShoulder
+engine.gamepad.pause=Start
+engine.gamepad.camera=Select

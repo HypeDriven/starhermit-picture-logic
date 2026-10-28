@@ -1,0 +1,183 @@
+/* Picture Logic — the browser build's css/style.css rewritten class-based for
+   the engine's UI (`npm run css` converts it into assets/ui-style.json).
+   Element selectors, ids, attribute selectors (body.high-contrast,
+   body.palette-cvd, body[data-gfx-detail]), color-mix(), zoom and @media do
+   not convert: every widget names its classes, the breakpoints are layouts
+   picked in native/screens.ts, and the theme colours (--bg, --filled,
+   --marked, --accent per Settings › Theme), the colour-vision palette and the
+   runtime's high contrast are token sets that native/style.ts applies (the
+   color-mix shades precomputed: panel-82 / panel-80 for the see-through HUD
+   and rails, accent-40 for the Play button's glow). The title's light-board
+   backdrop of Board detail Detailed is drawn in native/screens.ts. Larger
+   text is the runtime's text size. */
+
+:root {
+  --bg: #141a28;
+  --panel: #1c2436;
+  --panel-2: #232d44;
+  --panel-hover: #2b3752;
+  --ink: #e8ecf4;
+  --ink-dim: #9aa6bf;
+  --line: #33405e;
+  --filled: #e8a84b;
+  --marked: #7b88a8;
+  --accent: #8fd6a0;
+  --danger: #ef6f6c;
+  --focus: #ffd166;
+  --on-accent: #12202a;
+  --panel-82: #1c2436d1;
+  --panel-80: #1c2436cc;
+  --accent-40: #8fd6a066;
+}
+
+* { box-sizing: border-box; }
+
+/* ------------------------------------------------------------- text */
+.text { color: var(--ink); font-size: 16px; }
+.text-bold { color: var(--ink); font-size: 16px; font-weight: 700; }
+.small { color: var(--ink); font-size: 13.6px; }
+.dim { color: var(--ink-dim); font-size: 16px; }
+.dim-small { color: var(--ink-dim); font-size: 13.6px; }
+.accent-small { color: var(--accent); font-size: 13.6px; }
+.danger-small { color: var(--danger); font-size: 13.6px; }
+.logo-a { color: var(--filled); font-size: 64px; font-weight: 800; text-align: center; }
+.logo-b { color: var(--accent); font-size: 64px; font-weight: 800; text-align: center; }
+.tagline { color: var(--ink-dim); font-size: 16px; text-align: center; }
+.topbar-h1 { color: var(--ink); font-size: 20px; font-weight: 700; }
+.h2 { color: var(--ink); font-size: 20px; font-weight: 700; }
+.card-h3 { color: var(--ink); font-size: 16px; font-weight: 700; }
+.cta { color: var(--accent); font-size: 16px; font-weight: 600; }
+.sub { color: var(--ink-dim); font-size: 13.6px; }
+.badge-text { color: var(--ink-dim); font-size: 11.5px; font-weight: 700; }
+.badge-ranked-text { color: var(--accent); font-size: 11.5px; font-weight: 700; }
+.hud-k { color: var(--ink-dim); font-size: 11.5px; }
+.hud-v { color: var(--ink); font-size: 16px; }
+.hud-v-strong { color: var(--ink); font-size: 16px; font-weight: 700; }
+.hud-v-danger { color: var(--danger); font-size: 16px; }
+.stage-n { color: var(--ink); font-size: 16px; font-weight: 700; text-align: center; }
+.stage-n-locked { color: var(--ink-dim); font-size: 16px; font-weight: 700; text-align: center; }
+.stars { color: var(--filled); font-size: 12.8px; text-align: center; }
+.step-k { color: var(--accent); font-size: 12px; }
+.lesson-text { color: var(--ink); font-size: 16px; }
+.countdown { color: var(--accent); font-size: 128px; font-weight: 800; text-align: center; }
+.toast-text { color: var(--ink); font-size: 16px; text-align: center; }
+.result-mode { color: var(--ink-dim); font-size: 16px; text-align: center; }
+.result-big { color: var(--ink); font-size: 32px; font-weight: 800; text-align: center; }
+.result-sub { color: var(--ink-dim); font-size: 16px; text-align: center; }
+.score-k { color: var(--ink); font-size: 16px; }
+.score-v { color: var(--ink); font-size: 16px; font-weight: 700; text-align: end; }
+.score-v-neg { color: var(--danger); font-size: 16px; font-weight: 700; text-align: end; }
+.total-k { color: var(--accent); font-size: 19.2px; }
+.total-v { color: var(--accent); font-size: 19.2px; font-weight: 700; text-align: end; }
+.set-group { color: var(--accent); font-size: 12.8px; font-weight: 700; }
+.th { color: var(--ink-dim); font-size: 12.8px; font-weight: 700; }
+.td { color: var(--ink); font-size: 15.2px; }
+.td-me { color: var(--accent); font-size: 15.2px; font-weight: 700; }
+.td-dim { color: var(--ink-dim); font-size: 13.6px; }
+.kbd-text { color: var(--ink); font-size: 14.4px; font-weight: 700; }
+.ach-got { color: var(--accent); font-size: 13.6px; }
+.preparing { color: var(--ink); font-size: 18px; font-weight: 700; text-align: center; }
+
+/* ------------------------------------------------------------- surfaces */
+.page { background: var(--bg); border-radius: 0; }
+.topbar { background: var(--panel); border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.rail-card { background: var(--panel-80); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.help-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.help-card-off { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; opacity: 0.55; }
+.hud-item { background: var(--panel-82); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; }
+.hud-item-compact { background: var(--panel-82); border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; }
+.badge { border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px; }
+.badge-ranked { border: 1px solid var(--accent); border-radius: 99px; padding: 2px 8px; }
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: 0 20px 60px #00000080; }
+.lesson-banner { background: var(--panel-2); border: 1px solid var(--accent); border-radius: 14px; padding: 12px 18px; box-shadow: 0 10px 40px #00000080; }
+.lesson-banner-compact { background: var(--panel-2); border: 1px solid var(--accent); border-radius: 14px; padding: 8px 10px; box-shadow: 0 10px 40px #00000080; }
+.toast { background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 8px 18px; box-shadow: 0 8px 24px #00000066; }
+.score-row { border-bottom: 1px solid var(--line); border-radius: 0; padding: 6px 4px; }
+.score-row-last { border-radius: 0; padding: 8px 4px; }
+.set-row { border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 0; }
+.table-row { border-bottom: 1px solid var(--line); border-radius: 0; padding: 8px 0; }
+.kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom: 3px solid var(--line); border-radius: 6px; padding: 1px 7px; }
+.seg { border: 1px solid var(--line); border-radius: 12px; padding: 0; }
+.scrim { background: #080c14b8; border-radius: 0; }
+.cursor { border: 2px solid var(--focus); border-radius: 4px; }
+
+/* ------------------------------------------------------------- buttons */
+.btn {
+  min-height: 44px; min-width: 44px; padding: 8.8px 16px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-size: 16px; text-align: center;
+}
+.btn:hover { background: var(--panel-hover); }
+.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn:disabled { opacity: 0.45; }
+.btn-primary {
+  min-height: 44px; min-width: 44px; padding: 8.8px 16px;
+  background: var(--accent); border-radius: 12px;
+  color: var(--on-accent); font-size: 16px; font-weight: 700; text-align: center;
+}
+.btn-primary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-play {
+  min-height: 44px; padding: 15px 35px;
+  background: var(--accent); border-radius: 16px; box-shadow: 0 6px 30px var(--accent-40);
+  color: var(--on-accent); font-size: 21.6px; font-weight: 700; text-align: center;
+}
+.btn-play:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-ghost {
+  min-height: 44px; min-width: 44px; padding: 8.8px 16px;
+  background: #00000000; border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-size: 16px; text-align: center;
+}
+.btn-ghost:hover { background: var(--panel-hover); }
+.btn-ghost:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-sheet {
+  min-height: 44px; padding: 12px 14px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-size: 16px; text-align: start;
+}
+.btn-sheet:hover { background: var(--panel-hover); }
+.btn-sheet:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-sheet-primary {
+  min-height: 44px; padding: 12px 14px;
+  background: var(--accent); border-radius: 12px;
+  color: var(--on-accent); font-size: 16px; font-weight: 700; text-align: start;
+}
+.btn-sheet-primary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-sheet-ghost {
+  min-height: 44px; padding: 12px 14px;
+  background: #00000000; border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-size: 16px; text-align: start;
+}
+.btn-sheet-ghost:hover { background: var(--panel-hover); }
+.btn-sheet-ghost:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.seg-btn {
+  min-height: 44px; min-width: 64px; padding: 8.8px 16px;
+  background: var(--panel-2); border-radius: 0;
+  color: var(--ink); font-size: 16px; text-align: center;
+}
+.seg-btn:hover { background: var(--panel-hover); }
+.seg-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.seg-btn.active { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.card-btn {
+  min-height: 44px; padding: 14px 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-size: 16px; text-align: start;
+}
+.card-btn:hover { border-color: var(--accent); }
+.card-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.stage-btn {
+  min-height: 44px; padding: 4px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-size: 16px; font-weight: 700; text-align: center;
+}
+.stage-btn:hover { background: var(--panel-hover); }
+.stage-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.stage-btn:disabled { opacity: 0.4; }
+.stage-mastery {
+  min-height: 44px; padding: 4px;
+  background: var(--panel-2); border: 1px solid var(--filled); border-radius: 12px;
+  color: var(--ink); font-size: 16px; font-weight: 700; text-align: center;
+}
+.stage-mastery:hover { background: var(--panel-hover); }
+.stage-mastery:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.stage-mastery:disabled { opacity: 0.4; }
