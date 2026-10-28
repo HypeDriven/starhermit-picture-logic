@@ -159,5 +159,5 @@ The round's authoritative clock is the runtime's fixed steps (60 Hz): 500 ms tic
 - The in-game gamepad button remapping became the runtime's rebinding (Settings › Key bindings).
 - Anonymous telemetry (sent only to the old dev server) and the dev `server.js` with its replay-validated local boards are gone; the high-score post stays range-checked by `score-script.js` (server-side replay validation is not built, per the leaderboard policy for solo boards).
 - Guests' old browser localStorage progress does not migrate (signed-in cloud progress does).
-- The engine's room environment is ~3× brighter than r160's through per-material maps; the old intensities are scaled by 0.35 to match the old screenshots.
+- The room environment is built without the renderer, as the r160 page did (the 5-candela room), with the old envMapIntensity values unchanged.
 - Practice preset boards are seeded from the clock as before, so each Practice round is a new picture.

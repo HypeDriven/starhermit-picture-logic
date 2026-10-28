@@ -52,10 +52,6 @@ export const FRAMING = {
 /** r160 intensities ÷ π (key 2.6 / 2.05 with reflections, hemisphere 0.85 / 0.5, rim 0.5). */
 const LIGHT = { key: 2.6 / Math.PI, keyIbl: 2.05 / Math.PI, hemi: 0.85 / Math.PI, hemiIbl: 0.5 / Math.PI, rim: 0.5 / Math.PI, exposure: 1.05 };
 const FLORA_PLAIN = 3;
-// The engine's room environment lights ~3× brighter than r160's PMREM through per-material maps: scaled to match the old look.
-// The engine's RoomEnvironment lights ~3× brighter than r160's through the materials' own maps (measured against
-// the old build's High screenshots): the old envMapIntensity values are scaled to match its look.
-const ENV_K = 0.35;
 
 
 // ---------------------------------------------------------------- the fixed parts
@@ -131,7 +127,8 @@ let grainSize = 0;
 let envTex: Texture | null = null;
 function envMap(): Texture | null {
   if (!envTex) {
-    try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture; }
+    // r160's page built the room without the renderer (the 5-candela room in r155–r162).
+    try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; }
     catch (e) { console.warn(`environment: ${e instanceof Error ? e.message : String(e)}`); }
   }
   return envTex;
@@ -140,7 +137,7 @@ function envMap(): Texture | null {
 function withEnv<M extends MeshStandardMaterial>(m: M, intensity: number): M {
   const on = !!look?.reflections;
   m.envMap = on ? envMap() : null;
-  m.envMapIntensity = intensity * ENV_K;
+  m.envMapIntensity = intensity;
   return m;
 }
 const groundMat = new MeshStandardMaterial({ color: 0x232c40, roughness: 0.95, metalness: 0 });
