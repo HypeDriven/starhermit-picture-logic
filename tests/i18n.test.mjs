@@ -1,87 +1,64 @@
-// Every player-facing key used in markup (index.html data-i18n*), code
-// (main.js / ui.js) and content (themes, presets, challenges, lessons,
-// achievements, puzzle-name words) exists in all nine locales, with the same
-// {placeholders} as the en-US text. Run with DUMP=1 to list the keys.
+// Every player-facing string exists in all nine locales (node --test). Keys
+// are the US-English source strings of the engine client (native/*.ts) and
+// the content (see tests/i18n-keys.mjs); the generated picture names come
+// from translated word banks; the account strings are in js/platform-i18n.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { STRINGS, EN, NAME_WORDS } from '../js/strings.js';
-import { THEMES, PRACTICE_PRESETS, challengeSpecs, LESSONS, JOURNEY_STAGES, NAME_A, NAME_B } from '../js/content.js';
-import { ACHIEVEMENTS } from '../js/store.js';
-import { MODE_INFO } from '../js/ui.js';
-
-const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT'];
-const read = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-const lit = /'((?:[^'\\]|\\.)*)'/.source;
-
-export function usedKeys() {
-  const keys = new Set();
-  const html = read('index.html');
-  for (const m of html.matchAll(/data-i18n(?:-aria|-placeholder|-html)?="([^"]*)"/g)) keys.add(unescape(m[1]));
-  const main = read('js/main.js');
-  for (const re of [new RegExp(`\\btr\\(${lit}`, 'g'), new RegExp(`\\b[LH]\\(${lit}`, 'g'), new RegExp(`\\brow\\(${lit}`, 'g'),
-    new RegExp(`,\\s*${lit}\\)\\}`, 'g'), new RegExp(`\\['[\\w-]+', ${lit}\\]`, 'g'), new RegExp(`tr\\([^()]*\\?\\s*${lit}\\s*:\\s*${lit}`, 'g')]) {
-    for (const m of main.matchAll(re)) { keys.add(m[1]); if (m[2]) keys.add(m[2]); }
-  }
-  // message tables translated by lookup (explainInvalid, failText, sync notes)
-  for (const block of [main.slice(main.indexOf('const messages = {'), main.indexOf("const msg = messages")),
-    main.slice(main.indexOf('failText(reason) {'), main.indexOf('grant(key)')),
-    main.slice(main.indexOf('const cloudKey = {'), main.indexOf('const cloudNote'))]) {
-    for (const m of block.matchAll(new RegExp(`:\\s*${lit}`, 'g'))) keys.add(m[1]);
-  }
-  for (const m of main.matchAll(new RegExp(`note = ${lit}`, 'g'))) keys.add(m[1]);
-  for (const m of main.matchAll(new RegExp(`note = this\\.hosted \\? ${lit} : ${lit}`, 'g'))) { keys.add(m[1]); keys.add(m[2]); }
-  for (const m of main.matchAll(new RegExp(`unlocked\\.push\\(${lit}\\)`, 'g'))) keys.add(m[1]);
-  const ui = read('js/ui.js');
-  for (const m of ui.matchAll(new RegExp(`\\bt\\(${lit}`, 'g'))) keys.add(m[1]);
-  for (const m of ui.matchAll(new RegExp(`\\bt\\([^()]*\\?\\s*${lit}\\s*:\\s*${lit}`, 'g'))) { keys.add(m[1]); keys.add(m[2]); }
-  for (const m of ui.matchAll(new RegExp(`\\? \\(unlocked \\? ${lit} : ${lit}\\)`, 'g'))) { keys.add(m[1]); keys.add(m[2]); }
-  for (const m of ui.matchAll(new RegExp(`: \\(unlocked \\? ${lit} : ${lit}\\)`, 'g'))) { keys.add(m[1]); keys.add(m[2]); }
-  for (const m of ui.matchAll(new RegExp(`\\[${lit}, (?:comp\\.|-comp\\.|\`|keys\\()`, 'g'))) keys.add(m[1]);
-  for (const m of MODE_INFO) { keys.add(m.name); keys.add(m.desc); }
-  keys.add('Lesson'); keys.add('Custom');
-  for (const th of THEMES) keys.add(th.name);
-  for (const p of PRACTICE_PRESETS) { keys.add(p.name); keys.add(p.note); }
-  for (const c of challengeSpecs('2026-W42')) { keys.add(c.name); keys.add(c.desc); }
-  for (const l of LESSONS) { keys.add(l.name); keys.add(l.goal); for (const s of l.steps) keys.add(s.text); }
-  for (const s of JOURNEY_STAGES) if (s.intro) keys.add(s.intro);
-  for (const a of ACHIEVEMENTS) { keys.add(a.name); keys.add(a.desc); }
-  for (const k of Object.keys(EN)) keys.add(k);
-  // ids and numbers caught by the array/argument patterns are not strings
-  for (const k of [...keys]) if (k === '' || /^(gfx|rail)-|^(tray|hint|\d+)$/.test(k)) keys.delete(k);
-  return keys;
-}
+import { LOCALES, t, setLocale, num, puzzleName } from '../js/i18n.js';
+import { platformStrings } from '../js/platform-i18n.js';
+import { NAME_A, NAME_B } from '../js/content.js';
+import { ALL } from './i18n-keys.mjs';
 
 const ph = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
+const tags = (s) => (String(s).match(/<[^>]+>/g) || []).join('');
 
-test('every used key exists in every translated locale with matching placeholders', () => {
-  const keys = usedKeys();
-  if (process.env.DUMP) console.log([...keys].sort().map((k) => JSON.stringify(k)).join('\n'));
-  assert.ok(keys.size > 250, 'key scan found ' + keys.size);
-  const missing = [];
-  for (const loc of LOCALES) {
-    if (loc.startsWith('en-')) continue;
-    for (const k of keys) {
-      const v = STRINGS[loc][k];
-      if (typeof v !== 'string' || !v) missing.push(loc + ': ' + k);
-      else if (ph(v) !== ph(EN[k] ?? k)) missing.push(loc + ' placeholders: ' + k);
-    }
-  }
-  assert.deepEqual(missing, []);
+test('the key set is non-trivial', () => { assert.ok(ALL.size > 250, `only ${ALL.size} keys`); });
+
+for (const loc of LOCALES.filter((l) => !l.startsWith('en-'))) {
+  test(`${loc}: every key is translated with the same placeholders and markup`, () => {
+    const d = STRINGS[loc];
+    const missing = [...ALL].filter((k) => typeof d[k] !== 'string' || !d[k]);
+    assert.deepEqual(missing, [], `${missing.length} missing`);
+    assert.deepEqual([...ALL].filter((k) => ph(d[k]) !== ph(EN[k] ?? k)), [], 'placeholder mismatch');
+    assert.deepEqual([...ALL].filter((k) => tags(d[k]) !== tags(EN[k] ?? k)), [], 'markup mismatch');
+  });
+}
+
+test('no locale carries keys that no longer exist', () => {
+  for (const loc of LOCALES) assert.deepEqual(Object.keys(STRINGS[loc]).filter((k) => !ALL.has(k)), [], loc);
 });
 
-test('nine locales and puzzle-name word banks', () => {
-  assert.deepEqual(Object.keys(STRINGS).sort(), [...LOCALES].sort());
+test('picture-name word banks and account strings in every locale', () => {
   for (const loc of LOCALES) {
     const w = NAME_WORDS[loc] || NAME_WORDS[loc.slice(0, 2)];
-    assert.ok(w, 'name words for ' + loc);
-    for (const a of NAME_A) assert.ok(w.a[a], loc + ' name word ' + a);
-    for (const b of NAME_B) assert.ok(w.b[b], loc + ' name word ' + b);
+    assert.ok(w, loc);
+    for (const a of NAME_A) assert.ok(w.a[a], `${loc} ${a}`);
+    for (const b of NAME_B) assert.ok(w.b[b], `${loc} ${b}`);
+    const sh = platformStrings(loc);
+    for (const k of ['signIn', 'invite', 'inviteCopied', 'inviteFailed', 'signedOut', 'lbPosting', 'lbRank', 'lbPosted', 'lbFailed']) assert.ok(sh[k], `${loc} ${k}`);
+    assert.match(sh.lbRank, /\{rank\}/);
   }
 });
 
-test('en-GB overrides only real keys', () => {
-  const keys = usedKeys();
-  for (const k of Object.keys(STRINGS['en-GB'])) assert.ok(keys.has(k), 'unknown en-GB key ' + k);
+test('t() falls back and fills placeholders; regional variants; grouping and picture names', () => {
+  setLocale('de-DE');
+  assert.equal(t('Not a key {x}', { x: 1 }), 'Not a key 1');
+  assert.equal(t('Row {r}, column {c}, lit', { r: 2, c: 3 }), 'Zeile 2, Spalte 3, leuchtet');
+  assert.equal(num(1882), '1.882');
+  assert.equal(puzzleName('Lantern Fox'), 'Laternen-Fuchs');
+  setLocale('es-ES');
+  assert.equal(num(1882), '1882');
+  assert.equal(num(12345), '12.345');
+  assert.equal(t('Gamepad'), 'Mando');
+  setLocale('fr-FR');
+  assert.equal(num(1882), '1 882');
+  assert.equal(puzzleName('Lantern Fox'), 'Renard Lanterne');
+  setLocale('fr-CA');
+  assert.equal(t('Score'), 'Pointage');
+  setLocale('en-GB');
+  assert.equal(t('Color-vision safe'), 'Colour-vision safe');
+  setLocale('en-US');
+  assert.equal(num(1785), '1,785');
+  assert.equal(t('Hint'), 'Hint');
 });

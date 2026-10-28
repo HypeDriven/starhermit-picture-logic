@@ -1,0 +1,50 @@
+# Phone landscape (844 x 390, DPR 3): the title, a Practice board generated on the worker with the HUD as a
+# status column at the left and the tray as a column at the right, a fill and a mark by touch, a drag painting
+# a run, the pause sheet from the HUD's Pause and Leave puzzle; then lesson 2's banner docked at the top left.
+# viewport 844x390@3
+until 600 Read the clues
+frames 10
+save title-landscape
+touch =Play
+until 120 Choose a mode
+frames 10
+touch =Practice
+until 120 Custom seed
+frames 10
+touch =Calm · 8×8
+until 900 Row 1, column 1, unknown
+frames 150
+save round-landscape
+touch =Mark
+frames 6
+touch =Row 8, column 8, unknown
+frames 6
+expect Row 8, column 8, crossed
+touch =Fill
+frames 6
+touch =Hint
+frames 20
+swipe 38% 52% 66% 52% 12
+frames 20
+save painted-landscape
+touch =Pause game
+until 120 The board waits
+frames 10
+save pause-landscape
+touch =Leave puzzle
+until 120 Read the clues
+frames 10
+touch =Play
+until 120 Choose a mode
+frames 10
+touch =Learn
+until 120 One rule at a time
+frames 10
+save learn-landscape
+touch =2. Cross the Gaps
+until 300 step 1/
+frames 120
+save lesson-landscape
+touch =Row 1, column 1, unknown
+frames 10
+expect step 2/5

@@ -12,7 +12,7 @@ import {
   buildPuzzle, LESSONS, THEMES, PRACTICE_PRESETS,
 } from '../js/content.js';
 import { Rng, fnv1a } from '../js/prng.js';
-import { overlayLayout } from '../js/ui.js';
+import { overlayLayout } from '../js/layout.js';
 
 let passed = 0, failed = 0;
 function ok(cond, name) {

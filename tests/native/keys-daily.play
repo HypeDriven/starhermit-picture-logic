@@ -1,0 +1,44 @@
+# The menus by keys on a desktop (1280 x 800) and today's Daily Glow (generated on the worker) solved by the
+# hint key: the cursor moved with the arrows, a cross with X, then hints until the picture shows; the results.
+# viewport 1280x800@1
+until 600 Read the clues
+frames 10
+key Enter 1
+until 120 Choose a mode
+frames 10
+key ArrowDown 1
+frames 3
+key ArrowDown 1
+frames 3
+key Enter 1
+until 900 Row 1, column 1, unknown
+frames 150
+key Escape 1
+until 120 The board waits
+frames 10
+save pause-keys
+click =Leave puzzle
+until 120 Read the clues
+frames 10
+click =Daily Glow
+until 900 Row 1, column 1, unknown
+frames 150
+key ArrowRight 1
+frames 3
+key ArrowDown 1
+frames 3
+key KeyX 1
+frames 5
+expect Row 2, column 2, crossed
+save daily-board
+repeat 6000 until Picture revealed
+  key KeyH 1
+  frames 4
+end
+frames 20
+save daily-results
+expect Daily streak: 1 day(s).
+click =Back to title
+until 120 Today: scored
+frames 10
+save title-after-daily
