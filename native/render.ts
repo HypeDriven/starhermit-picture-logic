@@ -206,7 +206,7 @@ function rebuildSlab(): void {
   }
   const detailed = look.detailed;
   const w = cols + FRAMING.boardPad * 2, h = rows + FRAMING.boardPad * 2;
-  slabMat = withEnv(new MeshStandardMaterial({ color: theme.slab, roughness: detailed ? 0.72 : 0.6, metalness: 0.08 }), 0.35);
+  slabMat = withEnv(new MeshStandardMaterial({ color: own(theme.slab), roughness: detailed ? 0.72 : 0.6, metalness: 0.08 }), 0.35);
   if (detailed && grainTex) {
     slabMat.map = grainTex;
     slabMat.roughnessMap = grainTex;
@@ -217,7 +217,7 @@ function rebuildSlab(): void {
   slab.position.y = -0.26;
   scene.add(slab);
   if (detailed) {
-    rimMat = new MeshStandardMaterial({ color: 0x000000, emissive: theme.accent, emissiveIntensity: 0.6, roughness: 0.5 });
+    rimMat = new MeshStandardMaterial({ color: 0x000000, emissive: own(theme.accent), emissiveIntensity: 0.6, roughness: 0.5 });
     rimStrips = new Group();
     const gx = cols / 2 + 0.34, gz = rows / 2 + 0.34, t = 0.045;
     const strip = (sx: number, sz: number, x: number, z: number): void => {
@@ -316,13 +316,15 @@ export function syncState(g: number[], r: number, c: number, events: GameEvent[]
   }
 }
 
+/** Copies Color objects so materials never share one (three copies; the engine keeps the object). */
+function own<T>(v: T): T { return v && typeof (v as { clone?: unknown }).clone === "function" ? (v as unknown as { clone(): T }).clone() : v; }
 // ---------------------------------------------------------------- flora (render3d.js makeFlora: original shapes per theme)
 function makeFlora(rng: InstanceType<typeof Rng>, detailed: boolean): Group {
   const group = new Group();
   const bloomColors = theme.bloom.map((c) => new Color(c));
   const pick = (): Color => bloomColors[rng.int(0, bloomColors.length - 1)]!;
   const mat = (color: Color, emissive = 0): MeshStandardMaterial => withEnv(new MeshStandardMaterial({
-    color, roughness: detailed ? 0.5 : 0.7, metalness: 0.05, emissive: color, emissiveIntensity: detailed ? emissive * 1.25 : emissive, flatShading: detailed,
+    color: own(color), roughness: detailed ? 0.5 : 0.7, metalness: 0.05, emissive: own(color), emissiveIntensity: detailed ? emissive * 1.25 : emissive, flatShading: detailed,
   }), 0.4);
   switch (theme.flora) {
     case "blossom": {

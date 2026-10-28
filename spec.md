@@ -4,7 +4,7 @@
 **Game index:** 35
 **Genre:** Constraint picture puzzle (nonogram)
 **Players:** 1 player; asynchronous score comparison
-**Runtime:** a StarHermit engine script game (engine 1.19.2, host API 1.21, `engine.minor=20`), played natively by the StarHermit client and in browsers by the engine's web runtime
+**Runtime:** a StarHermit engine script game (engine 1.22.0, host API 1.21, `engine.minor=20`), played natively by the StarHermit client and in browsers by the engine's web runtime
 **Targets:** desktop, phones and tablets, portrait and landscape
 
 ## 1. Product vision
@@ -135,7 +135,7 @@ The round's authoritative clock is the runtime's fixed steps (60 Hz): 500 ms tic
 
 ## 6. StarHermit integration
 
-- **Manifest** (`starhermit.txt`): `launch=index.html` (the engine's web loader from `npm run package`), `engine.entry=native/main.ts`, `engine.version=1.19.2`, `engine.minor=20`, capabilities platform, storage, clipboard, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action.
+- **Manifest** (`starhermit.txt`): `launch=index.html` (the engine's web loader from `npm run package`), `engine.entry=native/main.ts`, `engine.version=1.22.0`, `engine.minor=20`, capabilities platform, storage, clipboard, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action.
 - **Save** (`starhermit:storage` saves, schema 1, device and cloud): `{ v, progress, name }`; another device's save merges on a conflict (`mergeSave`: journey records keep the most stars, best score and fastest time; dailies and challenges the better score; lessons, achievements (earliest date), daily dates and excluded dailies unioned; the local board merged to its top 50; completions, practice plays and best clean streak the larger; this device's clean streak, in-progress snapshot and name). The browser build's cloud slot (`game:<slug>`, `{ savedAt, settings, progress }`) shows as foreign: its progress, display name and game options are merged in and the slot is replaced once.
 - **Options** (engine settings, synced): theme, palette, leftHanded, holdToMark, captions, inputMode. The browser build's settings KV keys are adopted where they are game options (unless set here since), then all of them (and `ui.*`) are removed; volumes, mute, graphics, reduced motion, contrast, larger text, gamepad map and language are the runtime's Options.
 - **Clock:** the Daily date and the Challenge week come from the platform's clock (`serverNow`), else the device's UTC date.
