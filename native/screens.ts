@@ -422,8 +422,6 @@ function boardOverlay(L: Layout, s: State): void {
   const shadow = hc ? undefined : { color: "#000000cc", x: 0, y: Math.max(1, sc) };
   const active = !app.paused && app.phase !== "results";
   paint("board-overlay", field.x, field.y, field.width, field.height, () => {
-    const clip = { clip: { x: 0, y: 0, width: frame().width, height: frame().height } };
-    void clip;
     // Cells: hover wash, filled outline, the cross, the cursor.
     for (let r = 0; r < s.rows; r++) {
       for (let c = 0; c < s.cols; c++) {
@@ -486,7 +484,7 @@ function toasts(L: Layout): void {
   const at = inPlay ? { anchor: "bottom" as const, x: 0, y: L.short ? 12 : 90 } : { anchor: "top" as const, x: 0, y: 12 };
   ui.place("toast-stack", at, () => {
     ui.column("toast-col", () => {
-      app.toasts.forEach((t, i) => {
+      app.toasts.forEach((t) => {
         const m = draw.measureText(t.text, { size: 16 * sc, maxWidth: (maxW - 36) * sc });
         const w = m.width / sc + 36, h = m.height / sc + 16;
         ui.widget("", {
@@ -496,7 +494,6 @@ function toasts(L: Layout): void {
             draw.text(t.text, r.x + r.width / 2, r.y + 8 * sc, { size: 16 * sc, color: token("ink"), align: "center", maxWidth: (maxW - 36) * sc });
           },
         });
-        void i;
       });
     }, { spacing: 8, align: "center" });
   });

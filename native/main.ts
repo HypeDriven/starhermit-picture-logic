@@ -82,7 +82,6 @@ export const app = {
 };
 const now = (): number => clockMs / 1000;
 export const fresh = (): boolean => frame().frame !== app.openedFrame;
-let sessionSeq = 0;
 const sessionId = `s-${Date.now().toString(36)}`;
 
 // ------------------------------------------------------------------ helpers
@@ -740,7 +739,6 @@ onStart(() => {
   render.setReducedMotion(preferences().reducedMotion);
   applyLook();
   goTitle();
-  void sessionSeq;
 });
 onPreferencesChange((p) => render.setReducedMotion(p.reducedMotion));
 platform.onProgressMerged(() => toast(T("Progress synced from your account.")));
@@ -769,9 +767,7 @@ onUpdate((dt) => {
   frameDt = dt;
   applyLook();
   const o = platform.options;
-  const th = app.session && app.screen === null ? app.session.puzzle.theme : o.theme;
   applyTokens(o.theme, o.palette, ui.preferences().highContrast);
-  void th;
   audio.update(dt);
   const t = now();
   app.toasts = app.toasts.filter((x) => x.until >= t);

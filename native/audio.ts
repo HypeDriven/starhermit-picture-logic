@@ -38,11 +38,6 @@ const SAMPLE_MAP: Record<string, string[]> = {
   countdown: ["ui-countdown-tick"],
 };
 export type Sfx = keyof typeof SAMPLE_MAP;
-/** audio.js caption(): the text cue for meaningful audio (Settings › Captions). */
-export const CAPTIONS: Record<string, string> = {
-  fill: "Cell lit", mark: "Cell crossed", clear: "Mark cleared", error: "That cell is empty — mistake counted", line: "Line complete",
-  hint: "Hint revealed a cell", win: "Puzzle complete", fail: "Attempt ended", undo: "Move undone", pause: "Paused", countdown: "Get ready",
-};
 
 const clips = new Map<string, AudioClip>();
 const queue: string[] = [];

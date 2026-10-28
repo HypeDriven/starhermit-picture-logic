@@ -614,7 +614,7 @@ function fitDistance(): number {
   const yMax = Math.min(0.58, 1 - 2 * ins.top - 0.04), yMin = Math.max(-0.92, -1 + 2 * ins.bottom + 0.04);
   const cw = field.width;
   const clueXMin = cw ? -1 + (2 * ins.clueLeftPx) / cw : -1;
-  const saved = pose.dist, savedPan = framePan;
+  const saved = pose.dist;
   const fits = (dist: number): boolean => {
     pose.dist = dist;
     framePan = 0;
@@ -641,10 +641,7 @@ function fitDistance(): number {
     result = hi;
   }
   fits(result); // leaves framePan set for the fitted distance
-  const pan = framePan;
   pose.dist = saved;
-  framePan = savedPan;
-  framePan = pan;
   updateCamera();
   return result;
 }
