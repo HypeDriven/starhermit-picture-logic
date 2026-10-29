@@ -16,8 +16,8 @@
 // playfield's own aspect does the fitting, projection and picking.
 //
 // From three.js r160 (physically based lights): colours as written, the
-// punctual and hemisphere lights' intensities ÷ π (the engine takes three's
-// legacy units). r160's composer drew the scene in linear half floats,
+// punctual and hemisphere lights' intensities, shadow box and bias as the page
+// set them (engine.minor 28). r160's composer drew the scene in linear half floats,
 // GTAO, UnrealBloomPass (0.4 / 0.45 / threshold 0.85), the OutputPass (ACES
 // at 1.05), then GradeShader in display space and SMAA / FXAA; the runtime's
 // renderer.ao / bloom / grade ("display") / antialias do the same in that
@@ -30,7 +30,7 @@ import {
   ACESFilmicToneMapping, AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
   ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, IcosahedronGeometry, InstancedMesh,
   Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry,
-  PerspectiveCamera, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry,
+  OrthographicCamera, PerspectiveCamera, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry,
   SRGBColorSpace, SphereGeometry, Vector2, Vector3, Vector4, renderer, scene, type Material, type MaterialHooks, type Texture,
 } from "starhermit:scene";
 import { OffscreenCanvas, type OffscreenCanvasRenderingContext2D } from "starhermit:canvas";
@@ -49,8 +49,8 @@ export const FRAMING = {
   introDuration: 1.1,
   winDuration: 2.2,
 };
-/** r160 intensities ÷ π (key 2.6 / 2.05 with reflections, hemisphere 0.85 / 0.5, rim 0.5). */
-const LIGHT = { key: 2.6 / Math.PI, keyIbl: 2.05 / Math.PI, hemi: 0.85 / Math.PI, hemiIbl: 0.5 / Math.PI, rim: 0.5 / Math.PI, exposure: 1.05 };
+/** render3d.js (r160) intensities as set (key 2.6 / 2.05 with reflections, hemisphere 0.85 / 0.5, rim 0.5). */
+const LIGHT = { key: 2.6, keyIbl: 2.05, hemi: 0.85, hemiIbl: 0.5, rim: 0.5, exposure: 1.05 };
 const FLORA_PLAIN = 3;
 
 
@@ -60,7 +60,14 @@ const probe = new PerspectiveCamera(FRAMING.fov, 1, 0.1, 200);
 const keyLight = new DirectionalLight(0xfff2dd, LIGHT.key);
 keyLight.position.set(6, 12, 4);
 keyLight.shadow.bias = -0.0004;
-keyLight.shadow.normalBias = 1; // three's 0.02 world units; the engine's normal bias is in texels
+keyLight.shadow.normalBias = 0.02;
+/** render3d.js's shadow frustum, fitted to the board plus its ring of flora. */
+function fitShadowCamera(): void {
+  const extent = Math.max(rows || 8, cols || 8) * 0.72 + 5.2;
+  const cam = keyLight.shadow.camera as OrthographicCamera;
+  Object.assign(cam, { left: -extent, right: extent, top: extent, bottom: -extent, near: 2, far: 34 });
+  cam.updateProjectionMatrix();
+}
 const hemi = new HemisphereLight(0x8fa3c8, 0x1c2233, LIGHT.hemi);
 const rim = new DirectionalLight(0x88aaff, LIGHT.rim);
 rim.position.set(-6, 4, -8);
@@ -150,6 +157,7 @@ scene.add(floraGroup);
 
 // ---------------------------------------------------------------- the board
 let rows = 0, cols = 0, boardSeed = 7;
+fitShadowCamera();
 let grid: number[] | null = null;
 let cells: InstancedMesh | null = null;
 let cellGeoPlain: BufferGeometry | null = null, cellGeoDetailed: BufferGeometry | null = null;
@@ -255,6 +263,7 @@ export function clearBoard(): void {
 /** setBoard: a new board (size and seed), the camera swooping in from above. */
 export function setBoard(r: number, c: number, seed: number): void {
   rows = r; cols = c; boardSeed = seed;
+  fitShadowCamera();
   if (cells) scene.remove(cells);
   cells = null;
   if (!look) return;
