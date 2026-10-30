@@ -767,8 +767,8 @@ export function applyLook(next: Look): void {
   hemi.intensity = next.reflections ? LIGHT.hemiIbl : LIGHT.hemi;
   keyLight.intensity = next.reflections ? LIGHT.keyIbl : LIGHT.key;
   // UnrealBloomPass(0.4, 0.45, 0.85) on r160's linear composer target (before the tone mapping, as here).
-  // three r160 page: UnrealBloomPass 0.4 squared (0.16) for the engine's r185 bloom (engine.minor 29).
-  renderer.bloom = next.bloom ? { strength: 0.16, radius: 0.45, threshold: 0.85, resolution: next.budget.bloomRes } : null;
+  // three r160 page: bloom model "r160" with the page's strength 0.4 (engine.minor 30).
+  renderer.bloom = next.bloom ? { model: "r160", strength: 0.4, radius: 0.45, threshold: 0.85, resolution: next.budget.bloomRes } : null;
   // GTAOPass: blend 0.75, radius 0.5, distance exponent 1.4, thickness 1.2; 16 / 8 samples and the denoise per tier.
   renderer.ao = next.ao === "off" ? null : {
     blendIntensity: 0.75, radius: 0.5, distanceExponent: 1.4, thickness: 1.2, scale: 1, samples: next.ao === "high" ? 16 : 8, resolution: next.budget.aoRes,
@@ -777,7 +777,7 @@ export function applyLook(next: Look): void {
   // GradeShader after the OutputPass (display space): an 0.18 S-curve, saturation 1.1, cool shadows / warm highlights by a
   // smoothstep of luma from 0.2 to 0.8, a 0.26 vignette from 0.38 to 0.9 (y × 0.85).
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.09, saturation: 1.1, split: [0.2, 0.8], shadows: [0.97, 0.99, 1.05], highlights: [1.04, 1.0, 0.95],
+    space: "display", contrastCurve: "s", contrast: 0.18, saturation: 1.1, split: [0.2, 0.8], shadows: [0.97, 0.99, 1.05], highlights: [1.04, 1.0, 0.95],
     vignette: { amount: 0.26, inner: 0.38, outer: 0.9, scale: [1, 0.85] },
   } : null;
   renderer.antialias = next.antialias;
