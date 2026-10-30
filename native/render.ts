@@ -729,24 +729,10 @@ export function projectCells(): { rows: number; cols: number; centers: Float32Ar
 /** Whether the camera is still moving (the overlay follows every frame then). */
 export function moving(): boolean { return !!transition || shake > 0.001; }
 
-// ---------------------------------------------------------------- the look and theme
-/** three.js ACESFilmicToneMapping (RRT + ODT fit) of a linear colour, for the post tiers' background. */
-function aces(c: Color, exposure: number): Color {
-  const e = exposure / 0.6;
-  const r0 = c.r * e, g0 = c.g * e, b0 = c.b * e;
-  const r1 = 0.59719 * r0 + 0.35458 * g0 + 0.04823 * b0;
-  const g1 = 0.076 * r0 + 0.90834 * g0 + 0.01566 * b0;
-  const b1 = 0.0284 * r0 + 0.13383 * g0 + 0.83777 * b0;
-  const fit = (v: number): number => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081);
-  const r2 = fit(r1), g2 = fit(g1), b2 = fit(b1);
-  const cl = (v: number): number => Math.max(0, Math.min(1, v));
-  return new Color(cl(1.60475 * r2 - 0.53108 * g2 - 0.07367 * b2), cl(-0.10208 * r2 + 1.10813 * g2 - 0.00605 * b2), cl(-0.00327 * r2 - 0.07276 * g2 + 1.07602 * b2));
-}
 /** _applyTheme: background, fog, ground, fill tint, flora, slab, rim and cell colours. */
 function applyThemeColors(): void {
-  // r160's composer tone-mapped the background (the post tiers); Low drew the clear colour as is.
-  const sky = new Color(theme.sky);
-  scene.background = look && (look.bloom || look.ao !== "off" || look.grade) ? aces(sky, LIGHT.exposure) : sky;
+  // The post tiers tone-map the background through the post chain (engine.minor 29), as r160's composer did.
+  scene.background = new Color(theme.sky);
   (scene.fog as Fog).color.set(theme.fog);
   groundMat.color.set(theme.ground);
   hemi.color.set(theme.cellEdge).lerp(new Color(0xffffff), 0.4);
@@ -781,7 +767,8 @@ export function applyLook(next: Look): void {
   hemi.intensity = next.reflections ? LIGHT.hemiIbl : LIGHT.hemi;
   keyLight.intensity = next.reflections ? LIGHT.keyIbl : LIGHT.key;
   // UnrealBloomPass(0.4, 0.45, 0.85) on r160's linear composer target (before the tone mapping, as here).
-  renderer.bloom = next.bloom ? { strength: 0.4, radius: 0.45, threshold: 0.85, resolution: next.budget.bloomRes } : null;
+  // three r160 page: UnrealBloomPass 0.4 squared (0.16) for the engine's r185 bloom (engine.minor 29).
+  renderer.bloom = next.bloom ? { strength: 0.16, radius: 0.45, threshold: 0.85, resolution: next.budget.bloomRes } : null;
   // GTAOPass: blend 0.75, radius 0.5, distance exponent 1.4, thickness 1.2; 16 / 8 samples and the denoise per tier.
   renderer.ao = next.ao === "off" ? null : {
     blendIntensity: 0.75, radius: 0.5, distanceExponent: 1.4, thickness: 1.2, scale: 1, samples: next.ao === "high" ? 16 : 8, resolution: next.budget.aoRes,
