@@ -135,7 +135,7 @@ let envTex: Texture | null = null;
 function envMap(): Texture | null {
   if (!envTex) {
     // r160's page built the room without the renderer (the 5-candela room in r155–r162).
-    try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; }
+    try { const pageRoom = new RoomEnvironment(); pageRoom.position.y = 0; /* the page's three r160 (pre-r183) builds the room at the origin */ envTex = new PMREMGenerator(renderer).fromScene(pageRoom, 0.04).texture; }
     catch (e) { console.warn(`environment: ${e instanceof Error ? e.message : String(e)}`); }
   }
   return envTex;
