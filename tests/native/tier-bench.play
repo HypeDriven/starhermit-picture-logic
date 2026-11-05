@@ -1,0 +1,41 @@
+# Bench scene: Journey stage 1 on the 3D board, cells lit by clicks (two left unlit so it stays on the board). Written for tools/engine-tier-bench.mjs.
+until 600 Read the clues
+frames 10
+click =Play
+until 120 Choose a mode
+frames 10
+click =Journey
+until 120 Forty authored light-boards
+frames 10
+click =Stage 1, 5 by 5
+until 300 Row 1, column 1, unknown
+frames 120
+measure start
+click =Row 1, column 1, unknown
+frames 4
+click =Row 1, column 2, unknown
+frames 4
+click =Row 1, column 4, unknown
+frames 4
+click =Row 1, column 5, unknown
+frames 4
+click =Row 2, column 2, unknown
+frames 4
+click =Row 2, column 4, unknown
+frames 4
+click =Row 3, column 2, unknown
+frames 4
+click =Row 3, column 3, unknown
+frames 4
+click =Row 3, column 4, unknown
+frames 4
+click =Row 4, column 1, unknown
+frames 4
+click =Row 4, column 2, unknown
+frames 4
+click =Row 4, column 3, unknown
+frames 4
+click =Row 4, column 4, unknown
+frames 4
+frames 450
+measure stop

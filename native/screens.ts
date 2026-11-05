@@ -55,13 +55,6 @@ function para(text: string, width: number, cls = "text", id?: string, size?: num
   if (ui.measureText(text, { style: [cls], ...(size ? { size } : {}) }).width / ui.preferences().scale <= width) u.label(text);
   else u.paragraph(text, Math.max(20, width));
 }
-/** One line cut with an ellipsis at `width` (the HUD's puzzle name: text-overflow ellipsis). */
-function clipText(text: string, width: number, cls: string): string {
-  if (textWidth(text, cls) <= width) return text;
-  let s = text;
-  while (s.length > 1 && textWidth(`${s}…`, cls) > width) s = s.slice(0, -1);
-  return `${s.trimEnd()}…`;
-}
 interface Btn { id: string; text: string; style?: string; act: () => void; disabled?: boolean; name?: string; selected?: boolean; content?: () => void; width?: number; height?: number }
 const buttonWidth = (text: string, style: string): number => textWidth(text, style, "button") + 2;
 function button(b: Btn): void {
@@ -78,18 +71,7 @@ function button(b: Btn): void {
 }
 /** Buttons at their own widths in rows that wrap at `width` (flex-wrap). */
 function flow(label: string, list: Btn[], width: number, gap = 8, justify: "start" | "center" | "end" = "center"): void {
-  const rows: Btn[][] = [[]];
-  let used = 0;
-  const bw = (b: Btn): number => Math.min(width, b.width ?? buttonWidth(b.text, b.style ?? "btn"));
-  for (const b of list) {
-    const w = bw(b);
-    if (rows[rows.length - 1]!.length && used + gap + w > width) { rows.push([]); used = 0; }
-    used += (rows[rows.length - 1]!.length ? gap : 0) + w;
-    rows[rows.length - 1]!.push(b);
-  }
-  ui.column(label, () => {
-    rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => { for (const b of row) button(b); }, { spacing: gap, width, justify, align: "center" }));
-  }, { spacing: gap, width });
+  ui.row(label, () => { for (const b of list) button(b); }, { wrap: true, width, gap, justify, align: "center" });
 }
 function rect(r: ui.Rect): void { hudRects.push({ x: r.x, y: r.y, width: r.width, height: r.height }); }
 /** A window rectangle (window px) drawn by a placed role-none widget (its draw paints it; it takes no pointer). */
@@ -141,7 +123,8 @@ export function drawScreens(): void {
 }
 
 // ------------------------------------------------------------------ the play screen (index.html #screen-play)
-interface HudItem { id: string; k: string; v: string; cls: string; w: number }
+/** `clip`: the value's width when it is cut with an ellipsis (the puzzle name). */
+interface HudItem { id: string; k: string; v: string; cls: string; w: number; clip: number | null }
 function hudItems(s: State, compact: boolean, maxNameW: number): HudItem[] {
   const sess = app.session!;
   const k = s.constraints;
@@ -159,8 +142,8 @@ function hudItems(s: State, compact: boolean, maxNameW: number): HudItem[] {
   const name = `${sessionLabel(sess)} — ${puzzleName(sess.puzzle.name)}`;
   const pad = compact ? 18 + 2 : 24 + 2;
   const item = (id: string, kk: string, v: string, cls: string, maxW = 9999): HudItem => {
-    const vv = cls === "hud-v-strong" ? clipText(v, maxW, cls) : v;
-    return { id, k: kk, v: vv, cls, w: Math.max(textWidth(kk, "hud-k"), textWidth(vv, cls)) + pad };
+    const vw = textWidth(v, cls), clip = vw > maxW ? maxW : null;
+    return { id, k: kk, v, cls, clip, w: Math.max(textWidth(kk, "hud-k"), clip ?? vw) + pad };
   };
   return [
     item("hud-objective", upper(T("Puzzle")), name, "hud-v-strong", maxNameW),
@@ -174,7 +157,7 @@ function hudItems(s: State, compact: boolean, maxNameW: number): HudItem[] {
 function hudItem(it: HudItem, compact: boolean, width?: number): void {
   ui.column(it.id, () => {
     ui.style("hud-k").label(it.k);
-    ui.style(it.cls).id(`${it.id}-v`).label(it.v);
+    ui.style(it.cls, it.clip === null ? {} : { width: it.clip, text: { overflow: "ellipsis" } }).id(`${it.id}-v`).label(it.v);
   }, { style: compact ? "hud-item-compact" : "hud-item", spacing: 0, ...(width ? { width } : {}) });
 }
 interface TrayBtn { id: string; text: string; name: string; act: () => void; disabled: boolean }

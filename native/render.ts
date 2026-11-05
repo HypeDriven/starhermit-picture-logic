@@ -762,17 +762,18 @@ export function applyLook(next: Look): void {
   renderer.toneMappingExposure = LIGHT.exposure;
   renderer.shadowMap.enabled = next.shadows > 0;
   keyLight.castShadow = next.shadows > 0;
-  if (next.shadows > 0) keyLight.shadow.mapSize = next.shadows;
+  if (next.shadows > 0) keyLight.shadow.mapSize = next.shadows; // the level's size: the engine doesn't hold mapSize to it
   // The environment carries the fill, so the hemisphere eases off.
   hemi.intensity = next.reflections ? LIGHT.hemiIbl : LIGHT.hemi;
   keyLight.intensity = next.reflections ? LIGHT.keyIbl : LIGHT.key;
   // UnrealBloomPass(0.4, 0.45, 0.85) on r160's linear composer target (before the tone mapping, as here).
   // three r160 page: bloom model "r160" with the page's strength 0.4 (engine.minor 30).
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.4, radius: 0.45, threshold: 0.85, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { model: "r160", strength: 0.4, radius: 0.45, threshold: 0.85, resolution: next.bloom };
   // GTAOPass: blend 0.75, radius 0.5, distance exponent 1.4, thickness 1.2; 16 / 8 samples and the denoise per tier.
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: 0.75, radius: 0.5, distanceExponent: 1.4, thickness: 1.2, scale: 1, samples: next.ao === "high" ? 16 : 8, resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, hi = !!ao && ao.resolution >= 1; // the engine's AO "high" is full resolution
+  renderer.ao = ao && {
+    blendIntensity: 0.75, radius: 0.5, distanceExponent: 1.4, thickness: 1.2, scale: 1, samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // GradeShader after the OutputPass (display space): an 0.18 S-curve, saturation 1.1, cool shadows / warm highlights by a
   // smoothstep of luma from 0.2 to 0.8, a 0.26 vignette from 0.38 to 0.9 (y × 0.85).

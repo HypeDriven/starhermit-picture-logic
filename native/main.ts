@@ -22,7 +22,7 @@
 // countdown, the hold-to-mark delay and the pause before the results run on
 // it too, so a hidden window and slow frames never move them and play
 // scripts replay exactly.
-import { clipboard, frame, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
+import { clipboard, frame, levelSettings, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
 import { onAction, onPointerButton, onPointerMove, onTouch, primaryPointer } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn } from "starhermit:platform";
@@ -723,12 +723,12 @@ onFixedUpdate(() => {
 let lookKey = "";
 function applyLook(): void {
   const f = frame();
-  const k = `${f.quality}:${f.levelIndex}`;
+  const k = f.level;
   if (k === lookKey) return;
   lookKey = k;
-  render.applyLook(lookFor(f.quality, f.levelIndex));
+  render.applyLook(lookFor(levelSettings(f.level)));
 }
-export function currentLook(): ReturnType<typeof lookFor> { const f = frame(); return lookFor(f.quality, f.levelIndex); }
+export function currentLook(): ReturnType<typeof lookFor> { return lookFor(levelSettings(frame().level)); }
 
 onStart(() => {
   setFixedRate(60);

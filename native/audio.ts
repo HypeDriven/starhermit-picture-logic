@@ -14,8 +14,8 @@
 // mute and the voice limit. The oscillator stand-ins the browser build
 // synthesized while a sample decoded are not ported (a live synthesis graph
 // makes clip loads fail on the web runtime): a clip still loading is silent.
-// Clips load once the mixer runs (natively at once, in a browser after the
-// first press), one at a time.
+// Clips all load at once in onStart; the ambience and the music wait for the
+// mixer (natively at once, in a browser after the first press).
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
 import { Rng, type RngApi } from "./game.ts";
 
@@ -40,16 +40,17 @@ const SAMPLE_MAP: Record<string, string[]> = {
 export type Sfx = keyof typeof SAMPLE_MAP;
 
 const clips = new Map<string, AudioClip>();
-const queue: string[] = [];
-let loading = false;
-let wantClips = false;
 let suspended = false;
 let variant: RngApi = new Rng(1, "audio-variant");
 const lastAt = new Map<string, number>();
 let clock = 0;
 
-/** Asks for the clips; they load once the mixer runs (see update). */
-export function loadSfx(): void { wantClips = true; }
+/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
+export function loadSfx(): void {
+  for (const name of new Set(Object.values(SAMPLE_MAP).flat())) {
+    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
+}
 /** audio.js setSeed: the variant stream follows the puzzle. */
 export function setSeed(seed: number): void { variant = new Rng((seed ^ 0xa0d10) >>> 0, "audio-variant"); }
 
@@ -64,7 +65,7 @@ export function event(name: Sfx): void {
   const file = group.length === 1 ? group[0]! : variant.pick(group);
   const clip = clips.get(file);
   if (!clip) return;
-  try { playClip(clip, { bus: "effects" }); } catch { clips.delete(file); if (!queue.includes(file)) queue.push(file); }
+  try { playClip(clip, { bus: "effects" }); } catch { /* the mixer is full this frame: skip it */ }
 }
 
 // -- the room tone and the music ------------------------------------------------------------------
@@ -168,19 +169,6 @@ export function update(dt: number): void {
     try { bVoice.fade(MUSIC_GAIN * intensity, 0.6); } catch { /* gone */ }
   }
   if (context.state !== "running") return;
-  if (wantClips) {
-    wantClips = false;
-    for (const g of Object.values(SAMPLE_MAP)) for (const n of g) if (!queue.includes(n)) queue.push(n);
-  }
-  if (!loading && queue.length) {
-    const name = queue.shift()!;
-    if (!clips.has(name)) {
-      loading = true;
-      loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); loading = false; }, (e: unknown) => { console.warn(`sfx ${name}: ${String(e)}`); loading = false; });
-    }
-    return;
-  }
-  if (loading) return;
   if (!ambClip) {
     if (!renderAmbience(8000)) return;
     try { ambClip = createClip([amb], RATE); } catch (e) { console.warn(`audio: ${String(e)}`); ambPos = 0; }

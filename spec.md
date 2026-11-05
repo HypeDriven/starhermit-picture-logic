@@ -106,16 +106,16 @@ The browser build's three.js r160 scene ported: a slab with instanced cells (spr
 
 ### Graphics tiers (`native/quality.ts`)
 
-The runtime's quality tier (`frame().quality`) picks the old preset; the level (`levelIndex`) scales sparks and motes within it (≤ 2×). Render scale, the pixel-ratio cap, adaptive resolution and the frame-rate limit and readout are the runtime's.
+The engine's level (`levelSettings()`) sets the shadow map, AO, bloom, grade and anti-aliasing. The quality tier (`frame().quality`) picks the old art preset; the level's particle budget scales sparks and motes within it (≤ 2×) and the grain is held to the level's texture maximum. Render scale, the pixel-ratio cap, adaptive resolution and the frame-rate limit and readout are the runtime's.
 
-| Tier | Shadows | AO | Bloom / grade | AA | Reflections | Detail / ambient | Cells | Bevel | Grain | Flora | Sparks / motes |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Low | off | off | off | off | off | plain / static | Lambert | 2 | 128 | 3 | 160 / 40 |
-| Balanced | 1024 | off | on | MSAA | on | detailed / animated | Standard | 2 | 256 | 8 | 400 / 80 |
-| High | 2048 | on | on | SMAA | on | detailed / animated | clear-coat | 3 | 256 | 12 | 640 / 120 |
-| Ultra | 4096 | high | on | MSAA | on | detailed / animated | clear-coat | 4 | 512 | 18 | 960 / 180 |
+| Tier | Reflections | Detail / ambient | Cells | Bevel | Grain | Flora | Sparks / motes |
+|---|---|---|---|---|---|---|---|
+| Low | off | plain / static | Lambert | 2 | 128 | 3 | 160 / 40 |
+| Balanced | on | detailed / animated | Standard | 2 | 256 | 8 | 400 / 80 |
+| High | on | detailed / animated | clear-coat | 3 | 256 | 12 | 640 / 120 |
+| Ultra | on | detailed / animated | clear-coat | 4 | 512 | 18 | 960 / 180 |
 
-Post effects follow r160's composer order: GTAO, UnrealBloom (0.4 / 0.45 / threshold 0.85, half resolution below Ultra), ACES at exposure 1.05, the display-space grade (S-curve, saturation 1.1, cool shadows / warm highlights, vignette), SMAA or FXAA. The background colour is the tone-mapped sky on the post tiers, as r160's composer drew it.
+Post effects follow r160's composer order: GTAO, UnrealBloom (0.4 / 0.45 / threshold 0.85, the level's resolution), ACES at exposure 1.05, the display-space grade (S-curve, saturation 1.1, cool shadows / warm highlights, vignette), then the level's anti-aliasing. The background colour is the tone-mapped sky on the post tiers, as r160's composer drew it.
 
 ### Audio (`native/audio.ts`)
 
