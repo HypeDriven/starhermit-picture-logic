@@ -30,7 +30,7 @@ import {
   ACESFilmicToneMapping, AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
   ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, IcosahedronGeometry, InstancedMesh,
   Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry,
-  OrthographicCamera, PerspectiveCamera, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry,
+  OrthographicCamera, ParticleEmitter, PerspectiveCamera, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry,
   SRGBColorSpace, SphereGeometry, Vector2, Vector3, Vector4, renderer, scene, type Material, type MaterialHooks, type Texture,
 } from "starhermit:scene";
 import { OffscreenCanvas, type OffscreenCanvasRenderingContext2D } from "starhermit:canvas";
@@ -425,61 +425,27 @@ export function setHover(r: number, c: number, mode: "fill" | "mark"): void { ho
 export function setFocusCell(r: number, c: number): void { focusCell = { r, c }; }
 
 // ---------------------------------------------------------------- particles (one pooled cloud) and motes
-let points: Points | null = null;
-let pMax = 0, pHead = 0;
-let pPos = new Float32Array(0), pVel = new Float32Array(0), pLife = new Float32Array(0), pCol = new Float32Array(0);
-let pRng = new Rng(0xbeef, "fx");
+let sparks: ParticleEmitter | null = null;
+let sparkMat: Material | null = null;
+let pMax = 0;
 function buildParticles(): void {
   const max = particleCounts(look!).pool;
-  if (points && max === pMax) return;
-  if (points) { scene.remove(points); points.geometry.dispose(); (points.material as Material).dispose(); }
+  if (sparks && max === pMax) return;
+  if (sparks) { scene.remove(sparks); sparks.dispose(); sparkMat?.dispose(); sparks = null; }
   pMax = max;
-  pPos = new Float32Array(max * 3); pVel = new Float32Array(max * 3); pLife = new Float32Array(max); pCol = new Float32Array(max * 3);
-  pHead = 0;
-  for (let i = 0; i < max; i++) pPos[i * 3 + 1] = -50; // parked out of view
-  const geo = new BufferGeometry();
-  geo.setAttribute("position", new BufferAttribute(pPos, 3));
-  geo.setAttribute("color", new BufferAttribute(pCol, 3));
-  points = new Points(geo, new PointsMaterial({
-    size: 0.16, map: spriteTex, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, sizeAttenuation: true, blending: AdditiveBlending,
-  }));
-  points.frustumCulled = false;
-  scene.add(points);
-  pRng = new Rng(0xbeef, "fx");
+  if (!max) return;
+  sparkMat = new PointsMaterial({ size: 0.16, map: spriteTex, transparent: true, opacity: 0.95, depthWrite: false, sizeAttenuation: true, blending: AdditiveBlending });
+  // Up at 1.2–2.8 with up to 1.3 sideways, falling, gone in 0.7–1.2 s (a cone: the old fountain's sideways speed had a floor of 0.36).
+  sparks = new ParticleEmitter({
+    capacity: max, material: sparkMat, seed: 0xbeef, life: [0.7, 1.2], velocity: [0, 1.6, 0], velocitySpread: [0, 0.8, 0],
+    speed: [0.36, 1.32], spread: Math.PI / 2, gravity: [0, -4.5, 0],
+  });
+  sparks.frustumCulled = false;
+  scene.add(sparks);
 }
 function spawnBurst(pos: Vector3, color: number | string, count: number): void {
-  if (!points || !pMax) return;
-  const c = new Color(color);
-  const n = Math.min(count, Math.floor(pMax / 4));
-  for (let k = 0; k < n; k++) {
-    const i = pHead = (pHead + 1) % pMax;
-    pPos[i * 3] = pos.x; pPos[i * 3 + 1] = pos.y + 0.25; pPos[i * 3 + 2] = pos.z;
-    const a = pRng.float() * Math.PI * 2;
-    const sp = 0.6 + pRng.float() * 1.6;
-    pVel[i * 3] = Math.cos(a) * sp * 0.6;
-    pVel[i * 3 + 1] = 1.2 + pRng.float() * 1.6;
-    pVel[i * 3 + 2] = Math.sin(a) * sp * 0.6;
-    pLife[i] = 0.7 + pRng.float() * 0.5;
-    pCol[i * 3] = c.r; pCol[i * 3 + 1] = c.g; pCol[i * 3 + 2] = c.b;
-  }
-}
-function updateParticles(dt: number): void {
-  if (!points) return;
-  let any = false;
-  for (let i = 0; i < pMax; i++) {
-    if (pLife[i]! <= 0) continue;
-    any = true;
-    pLife[i]! -= dt;
-    pVel[i * 3 + 1]! -= 4.5 * dt;
-    pPos[i * 3]! += pVel[i * 3]! * dt;
-    pPos[i * 3 + 1]! += pVel[i * 3 + 1]! * dt;
-    pPos[i * 3 + 2]! += pVel[i * 3 + 2]! * dt;
-    if (pLife[i]! <= 0) pPos[i * 3 + 1] = -50;
-  }
-  if (any) {
-    points.geometry.getAttribute("position")!.needsUpdate = true;
-    points.geometry.getAttribute("color")!.needsUpdate = true;
-  }
+  if (!sparks || !pMax) return;
+  sparks.burst(Math.min(count, Math.floor(pMax / 4)), [pos.x, pos.y + 0.25, pos.z], { color });
 }
 let motes: Points | null = null;
 let moteN = -1;
@@ -841,7 +807,7 @@ export function update(dt: number, w: number, h: number): void {
   placeCamera();
   // Attenuated points: three sized them by the canvas (the playfield) height; the engine by the window's.
   const k = field.height / win.h;
-  if (points) (points.material as PointsMaterial).size = 0.16 * k;
+  if (sparkMat) (sparkMat as PointsMaterial).size = 0.16 * k;
   if (motes) (motes.material as PointsMaterial).size = 0.16 * k;
 
   const ambient = !!look?.ambient && !reducedMotion;
@@ -852,7 +818,6 @@ export function update(dt: number, w: number, h: number): void {
 
   if (cells && grid) writeCells(dt);
   updateBloom(dt);
-  updateParticles(dt);
 
   const sel = hover.r >= 0 ? hover : focusCell;
   if (cells && sel.r >= 0 && sel.r < rows && sel.c < cols) {

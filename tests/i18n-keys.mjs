@@ -7,9 +7,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { THEMES, PRACTICE_PRESETS, challengeSpecs, LESSONS, JOURNEY_STAGES } from '../js/content.js';
 import { ACHIEVEMENTS } from '../js/progress.js';
-import { EN } from '../js/strings.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
+const US = JSON.parse(readFileSync(join(ROOT, 'assets/strings.json'), 'utf8'))['en-US'];
+/** The symbolic keys: the en-US messages that aren't their own key. */
+export const EN = Object.fromEntries(Object.entries(US).filter(([k, v]) => k !== v));
 const SKIP = new Set(['i18n.ts']);
 const unescape = (s) => s.replace(/\\(['"`\\])/g, '$1');
 

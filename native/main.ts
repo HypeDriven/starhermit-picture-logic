@@ -202,7 +202,6 @@ function beginPlay(s: Session): void {
   app.cursor = { r: 0, c: 0 };
   app.hover = null;
   tickAcc = 0;
-  audio.setSeed(s.state.seed);
   audio.setTheme(s.puzzle.theme);
   audio.setSuspended(false);
   render.setTheme(s.puzzle.theme);
@@ -514,8 +513,8 @@ function postToLeaderboard(total: number | null): void {
 export function leaderboardLine(): string | null {
   const r = app.lb;
   if (!r) return null;
-  if (r === "posting") return S("lbPosting");
-  return !r.posted ? S("lbFailed") : r.rank ? S("lbRank", { rank: r.rank }) : S("lbPosted");
+  if (r === "posting") return S("leaderboardPosting");
+  return !r.posted ? S("leaderboardNotPosted") : r.rank ? S("leaderboardRank", { rank: r.rank }) : S("leaderboardPosted");
 }
 export function failText(reason: string | null): string {
   const R = Rules.REASON;
@@ -547,7 +546,7 @@ export function signIn(): void { void requestSignIn().catch(() => undefined); }
 export function copyInvite(): void {
   const link = platform.inviteLink();
   if (!link) return;
-  try { clipboard.writeText(link); toast(S("inviteCopied")); } catch { toast(S("inviteFailed", { link })); }
+  try { clipboard.writeText(link); toast(S("inviteCopied")); } catch { toast(S("inviteLink", { link })); }
 }
 export function resetLessons(): void {
   platform.save().progress.lessons = {};
@@ -768,7 +767,7 @@ onUpdate((dt) => {
   applyLook();
   const o = platform.options;
   applyTokens(o.theme, o.palette, ui.preferences().highContrast);
-  audio.update(dt);
+  audio.update();
   const t = now();
   app.toasts = app.toasts.filter((x) => x.until >= t);
 });

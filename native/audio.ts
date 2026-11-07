@@ -1,23 +1,19 @@
 // Sound, as the browser build's js/audio.js: the authored one-shots
-// (sfx/<name>.opus) per game event, one clip of each event's group picked by
-// the seeded variant stream (setSeed: the puzzle's seed), with the 40 ms
-// double-trigger guard; the quiet room tone (looped noise lowpassed at
-// 320 Hz) and the adaptive music (a slow three-sine pad every 7.2 s, rooted
-// by the puzzle's theme, and a sparse pentatonic melody every 1.8 s whose
-// density follows the board's progress). The browser build ran the music
-// and room tone live (oscillators on timers, a noise loop); here they are
-// rendered once into clips (createClip, a slice a frame) and looped on the
-// music bus — the melody's extra notes for a busy board are a second loop
-// faded in by the intensity — as the runtime has no ambience bus. The
-// browser build's bus levels (music 0.5 and ambience 0.35 against effects
-// 0.8) are the voices' gains. The runtime's Options own the volumes, the
-// mute and the voice limit. The oscillator stand-ins the browser build
-// synthesized while a sample decoded are not ported (a live synthesis graph
-// makes clip loads fail on the web runtime): a clip still loading is silent.
-// Clips all load at once in onStart; the ambience and the music wait for the
-// mixer (natively at once, in a browser after the first press).
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
-import { Rng, type RngApi } from "./game.ts";
+// (sfx/<name>.opus) per game event, a SoundBank per event (a random variant,
+// with the 40 ms double-trigger guard); the quiet room tone (looped noise
+// lowpassed at 320 Hz) and the adaptive music (a slow three-sine pad every
+// 7.2 s, rooted by the puzzle's theme, and a sparse pentatonic melody every
+// 1.8 s whose density follows the board's progress). They are rendered once
+// by OfflineAudioContext, one context a stem, and looped on the music bus —
+// the melody's extra notes for a busy board are a second loop faded in by the
+// intensity — as the runtime has no ambience bus. The browser build's bus
+// levels (music 0.5 and ambience 0.35 against effects 0.8) are the voices'
+// gains. The runtime's Options own the volumes, the mute and the voice limit.
+// Clips load and stems render at once in onStart; the voices wait for the
+// mixer (natively at once, in a browser after the first press). A cue whose
+// clips are still loading is silent.
+import { OfflineAudioContext, context, createClip, loadClip, play as playClip, SoundBank, type AudioClip, type Sound } from "starhermit:audio";
+import { Rng } from "./game.ts";
 
 /** audio.js SAMPLE_MAP. */
 const SAMPLE_MAP: Record<string, string[]> = {
@@ -39,82 +35,77 @@ const SAMPLE_MAP: Record<string, string[]> = {
 };
 export type Sfx = keyof typeof SAMPLE_MAP;
 
-const clips = new Map<string, AudioClip>();
+const banks = new Map<string, SoundBank>();
 let suspended = false;
-let variant: RngApi = new Rng(1, "audio-variant");
-const lastAt = new Map<string, number>();
-let clock = 0;
 
-/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
+/** Loads every clip and renders the stems at once (onStart). */
 export function loadSfx(): void {
-  for (const name of new Set(Object.values(SAMPLE_MAP).flat())) {
-    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  for (const [event, names] of Object.entries(SAMPLE_MAP)) {
+    void Promise.all(names.map((name) => loadClip(`sfx/${name}.opus`).catch((e: unknown) => { console.warn(`sfx ${name}: ${String(e)}`); return null; }))).then((loaded) => {
+      const list = loaded.filter((c) => c !== null);
+      if (list.length) banks.set(event, new SoundBank({ clips: list, bus: "effects", minGap: 0.04 }));
+    });
   }
+  renderStem(renderAmbience, (c) => { ambClip = c; });
+  renderStem(() => renderNotes(MEL_S, calm), (c) => { aClip = c; });
+  renderStem(() => renderNotes(MEL_S, dense), (c) => { bClip = c; });
 }
-/** audio.js setSeed: the variant stream follows the puzzle. */
-export function setSeed(seed: number): void { variant = new Rng((seed ^ 0xa0d10) >>> 0, "audio-variant"); }
 
 /** audio.js event(): one clip of the event's group (none within 40 ms of the last). */
 export function event(name: Sfx): void {
   if (suspended) return;
-  const last = lastAt.get(name) ?? -1;
-  if (last >= 0 && clock - last < 0.04) return;
-  lastAt.set(name, clock);
-  const group = SAMPLE_MAP[name];
-  if (!group) return;
-  const file = group.length === 1 ? group[0]! : variant.pick(group);
-  const clip = clips.get(file);
-  if (!clip) return;
-  try { playClip(clip, { bus: "effects" }); } catch { /* the mixer is full this frame: skip it */ }
+  try { banks.get(name)?.play(); } catch { /* the mixer is full this frame: skip it */ }
 }
 
 // -- the room tone and the music ------------------------------------------------------------------
 const RATE = 22050;
-const AMB_N = RATE * 2;
-const amb = new Float32Array(AMB_N);
-let ambPos = 0, ambV = 0, ambS = 24680, ambY = 0;
-/** audio.js startAmbience: v = 0.98 v + noise × 0.02 (× 8), then the 320 Hz lowpass (run twice round so the loop joins). */
-function renderAmbience(count: number): boolean {
-  const k = 1 - Math.exp((-2 * Math.PI * 320) / RATE);
-  const end = Math.min(2 * AMB_N, ambPos + count);
-  for (; ambPos < end; ambPos++) {
-    const i = ambPos % AMB_N;
-    if (ambPos < AMB_N) {
-      ambS = (ambS * 1103515245 + 12345) & 0x7fffffff;
-      ambV = ambV * 0.98 + (ambS / 0x3fffffff - 1) * 0.02;
-      amb[i] = ambV * 8;
-    } else {
-      ambY += k * (amb[i]! - ambY);
-      amb[i] = ambY * 0.5;
-    }
-  }
-  return ambPos >= 2 * AMB_N;
+/** Makes the biquads' level the old two one-poles' (rms 0.200). */
+const AMB_MAKEUP = 3.153;
+/** audio.js startAmbience: noise through v = 0.98 v + … (about 71 Hz), then the 320 Hz lowpass; periodic once settled, so the loop joins. */
+async function renderAmbience(): Promise<AudioClip> {
+  const n = 2 * RATE, settle = Math.round(0.25 * RATE);
+  const off = new OfflineAudioContext(1, settle + n, RATE);
+  const noise = off.createNoise({ seed: 24680, seconds: 2 });
+  const lp1 = off.createBiquadFilter(); lp1.type = "lowpass"; lp1.frequency.value = 71;
+  const lp2 = off.createBiquadFilter(); lp2.type = "lowpass"; lp2.frequency.value = 320;
+  const g = off.createGain(); g.gain.value = AMB_MAKEUP;
+  noise.connect(lp1).connect(lp2).connect(g).connect(off.destination); noise.start();
+  const r = await off.startRendering();
+  return createClip([r.getChannelData(0).slice(settle)], RATE);
 }
 
 const BASE = 220;
 const SCALE = [0, 3, 5, 7, 10];
 const THEME_SHIFT: Record<string, number> = { "dawn-garden": 0, "tide-glass": -2, "ember-night": -4, "moss-archive": 3, "snow-signal": 5 };
 interface Note { t: number; f: number; dur: number; gain: number; attack: number }
-/** audio.js _tone: linear attack, exponential decay to 0.0008 by `dur`, wrapping round the loop. */
-function renderNote(buf: Float32Array, n: Note): void {
-  const len = Math.round((n.dur + 0.05) * RATE), start = Math.round(n.t * RATE);
-  for (let i = 0; i < len; i++) {
-    const t = i / RATE;
-    const env = t < n.attack ? (t / n.attack) * n.gain : n.gain * Math.pow(0.0008 / n.gain, Math.min(1, (t - n.attack) / Math.max(0.001, n.dur - n.attack)));
-    buf[(start + i) % buf.length]! += Math.sin(2 * Math.PI * n.f * t) * env;
+/** audio.js _tone: linear attack, exponential decay to 0.0008 by `dur`; one context a stem. */
+async function renderNotes(seconds: number, notes: readonly Note[]): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round(seconds * RATE), RATE);
+  for (const n of notes) {
+    const o = off.createOscillator(); o.frequency.value = n.f;
+    const g = off.createGain();
+    g.gain.setValueAtTime(0, n.t);
+    g.gain.linearRampToValueAtTime(n.gain, n.t + n.attack);
+    g.gain.exponentialRampToValueAtTime(0.0008, n.t + n.dur);
+    o.connect(g).connect(off.destination);
+    o.start(n.t); o.stop(n.t + n.dur + 0.05);
   }
+  return createClip(await off.startRendering());
+}
+function renderStem(render: () => Promise<AudioClip>, done: (c: AudioClip) => void): void {
+  render().then(done, (e: unknown) => console.warn(`audio: ${String(e)}`));
 }
 /** The pad: three sines on the theme's root, 1.2 s attack, 3.6 s long, once per 7.2 s loop. */
-const PAD_N = Math.round(RATE * 7.2);
+const PAD_S = 7.2;
 const pads = new Map<string, AudioClip>();
-let padBuf: Float32Array | null = null, padNote = 0, padTheme = "";
+const padsAsked = new Set<string>();
 function padNotes(theme: string): Note[] {
   const root = (BASE / 2) * Math.pow(2, (THEME_SHIFT[theme] ?? 0) / 12);
   return [1, 1.5, 2].map((m) => ({ t: 0, f: root * m, dur: 3.6, gain: 0.05, attack: 1.2 }));
 }
 /** The melody: a slot every 1.8 s; a note in a slot with chance 0.35 (calm) or, at full intensity, 0.95 (the dense loop's extras). */
 const SLOTS = 16, SLOT_S = 1.8;
-const MEL_N = Math.round(RATE * SLOTS * SLOT_S);
+const MEL_S = SLOTS * SLOT_S;
 const calm: Note[] = [], dense: Note[] = [];
 {
   const r = new Rng(0x3e10d, "audio-variant");
@@ -130,14 +121,6 @@ const calm: Note[] = [], dense: Note[] = [];
     else if (roll < 0.95) dense.push(note);
   }
 }
-const melA = new Float32Array(MEL_N), melB = new Float32Array(MEL_N);
-let noteA = 0, noteB = 0;
-function renderMelody(): boolean {
-  if (noteA < calm.length) { renderNote(melA, calm[noteA++]!); return false; }
-  if (noteB < dense.length) { renderNote(melB, dense[noteB++]!); return false; }
-  return true;
-}
-
 let ambClip: AudioClip | null = null, aClip: AudioClip | null = null, bClip: AudioClip | null = null;
 let ambVoice: Sound | null = null, aVoice: Sound | null = null, bVoice: Sound | null = null, padVoice: Sound | null = null;
 let voicePadTheme = "";
@@ -161,50 +144,36 @@ export function setSuspended(on: boolean): void {
 }
 
 let lastIntensity = -1;
-/** Each frame: the clips once the mixer runs (one at a time), then the room tone, the melody and the theme's pad. */
-export function update(dt: number): void {
-  clock += dt;
+/** Each frame: once the mixer runs, the room tone, the melody and the theme's pad as their stems are ready. */
+export function update(): void {
   if (bVoice && !suspended && Math.abs(intensity - lastIntensity) > 0.02) {
     lastIntensity = intensity;
     try { bVoice.fade(MUSIC_GAIN * intensity, 0.6); } catch { /* gone */ }
   }
   if (context.state !== "running") return;
-  if (!ambClip) {
-    if (!renderAmbience(8000)) return;
-    try { ambClip = createClip([amb], RATE); } catch (e) { console.warn(`audio: ${String(e)}`); ambPos = 0; }
-    return;
-  }
-  if (!ambVoice) {
+  if (ambClip && !ambVoice) {
     try { ambVoice = playClip(ambClip, { bus: "music", gain: suspended ? 0 : AMB_GAIN, loop: true }); } catch { ambVoice = null; }
-    return;
   }
-  if (!aClip || !bClip) {
-    if (!renderMelody()) return;
-    try { aClip = createClip([melA], RATE); bClip = createClip([melB], RATE); } catch (e) { console.warn(`audio: ${String(e)}`); }
-    return;
-  }
-  if (!aVoice) {
+  if (aClip && !aVoice) {
     try { aVoice = playClip(aClip, { bus: "music", gain: suspended ? 0 : MUSIC_GAIN, loop: true }); } catch { aVoice = null; }
-    return;
   }
-  if (!bVoice) {
+  if (bClip && !bVoice) {
     try { bVoice = playClip(bClip, { bus: "music", gain: suspended ? 0 : MUSIC_GAIN * intensity, loop: true }); } catch { bVoice = null; }
-    return;
   }
-  // The theme's pad: rendered once per theme (a note a frame), swapped in when the puzzle's theme changes.
+  // The theme's pad: rendered once per theme, swapped in when the puzzle's theme changes.
   if (voicePadTheme !== wantTheme) {
-    let clip = pads.get(wantTheme);
+    const theme = wantTheme, clip = pads.get(theme);
     if (!clip) {
-      if (padTheme !== wantTheme || !padBuf) { padTheme = wantTheme; padBuf = new Float32Array(PAD_N); padNote = 0; }
-      const notes = padNotes(wantTheme);
-      if (padNote < notes.length) { renderNote(padBuf, notes[padNote++]!); return; }
-      try { clip = createClip([padBuf], RATE); pads.set(wantTheme, clip); } catch (e) { console.warn(`audio: ${String(e)}`); voicePadTheme = wantTheme; return; }
-      padBuf = null;
+      if (!padsAsked.has(theme)) {
+        padsAsked.add(theme);
+        renderStem(() => renderNotes(PAD_S, padNotes(theme)), (c) => { pads.set(theme, c); });
+      }
+      return;
     }
     try { padVoice?.fade(0, 0.8); } catch { /* gone */ }
     const old = padVoice;
     if (old) setTimeout(() => { try { old.stop(); } catch { /* gone */ } }, 900);
     try { padVoice = playClip(clip, { bus: "music", gain: suspended ? 0 : MUSIC_GAIN, loop: true }); } catch { padVoice = null; }
-    voicePadTheme = wantTheme;
+    voicePadTheme = theme;
   }
 }
