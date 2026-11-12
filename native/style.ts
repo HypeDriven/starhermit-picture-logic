@@ -1,3 +1,5 @@
+// localization-runtime:attached
+import { setLocalizedStyles as __l10nStyles } from "./l10n/font.ts";
 // The look of the menus, HUD, rails, tray and sheets: the browser build's
 // css/style.css, rewritten class-based in tools/ui-style.css and converted
 // once with `starhermit css` into assets/ui-style.json (`npm run css`),
@@ -45,7 +47,7 @@ export function initStyles(): void {
     pressed: BASE.line!, field: BASE["panel-2"]!, accent: BASE.accent!, focus: BASE.focus!, outline: BASE.line!,
   });
   ui.setTokens(css.tokens);
-  ui.setStyles({
+  __l10nStyles({
     ...css.styles,
     label: { text: { color: "$ink" } },
     paragraph: { text: { color: "$ink" } },

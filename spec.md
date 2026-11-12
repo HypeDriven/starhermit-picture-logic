@@ -161,3 +161,11 @@ The round's authoritative clock is the runtime's fixed steps (60 Hz): 500 ms tic
 - Guests' old browser localStorage progress does not migrate (signed-in cloud progress does).
 - The room environment is built without the renderer, as the r160 page did (the 5-candela room), with the old envMapIntensity values unchanged.
 - Practice preset boards are seeded from the clock as before, so each Practice round is a new picture.
+
+<!-- regional-localization:start -->
+
+### Regional interface languages
+
+The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `zh-HK`, `yue-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `ta-SG`, `da-DE`, `lb-BE`, `eu-FR`, `ca-FR`, `oc-FR`, `sl-IT`, `fur-IT`, `ca-IT`, `oc-IT`, `ru-FI`, `ca-ES`, `eu-ES`, `gl-ES`, `ru-EE`, `su-ID`, `km-VN`, `co-FR`, `bew-ID`.
+
+<!-- regional-localization:end -->
