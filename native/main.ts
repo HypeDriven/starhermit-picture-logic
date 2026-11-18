@@ -89,11 +89,11 @@ const sessionId = `s-${Date.now().toString(36)}`;
 export function announce(text: string, assertive = false): void {
   if (text && text.trim()) ui.announce(text.slice(0, 500), { politeness: assertive ? "assertive" : "polite" });
 }
+const toastHandles = new Map<string, ui.Toast>();
 export function toast(text: string): void {
-  const same = app.toasts.find((x) => x.text === text);
-  if (same) { same.until = now() + 3.1; return; } // the same note again refreshes its toast
-  app.toasts.push({ text, until: now() + 3.1 });
-  if (app.toasts.length > 4) app.toasts.shift();
+  toastHandles.get(text)?.dismiss();
+  const handle = ui.toast!(text, { duration: 3.1, position: app.screen ? "top" : "bottom", offset: app.screen ? 12 : 90, style: "toast", dismissible: false });
+  if (handle) toastHandles.set(text, handle);
 }
 export function inputMode(): "fill" | "mark" { return platform.options.inputMode; }
 export function playing(): boolean { return !!app.session && app.phase === "active" && !app.paused && app.screen === null; }

@@ -27,12 +27,9 @@
 // frame-rate readout are the runtime's. Rendering never touches the rules
 // state.
 import {
-  ACESFilmicToneMapping, AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color,
-  ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, IcosahedronGeometry, InstancedMesh,
-  Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry,
-  OrthographicCamera, ParticleEmitter, PerspectiveCamera, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry,
-  SRGBColorSpace, SphereGeometry, Vector2, Vector3, Vector4, renderer, scene, type Material, type MaterialHooks, type Texture,
+  ACESFilmicToneMapping, AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry, SRGBColorSpace, SphereGeometry, Vector2, Vector3, Vector4, renderer, scene, type Material, type MaterialHooks, type Texture,
 } from "starhermit:scene";
+import { GPUParticleEmitter } from "starhermit:particles";
 import { OffscreenCanvas, type OffscreenCanvasRenderingContext2D } from "starhermit:canvas";
 import { CELL, Content, Rng, type GameEvent, type Theme } from "./game.ts";
 import { particleCounts, type Look } from "./quality.ts";
@@ -425,8 +422,8 @@ export function setHover(r: number, c: number, mode: "fill" | "mark"): void { ho
 export function setFocusCell(r: number, c: number): void { focusCell = { r, c }; }
 
 // ---------------------------------------------------------------- particles (one pooled cloud) and motes
-let sparks: ParticleEmitter | null = null;
-let sparkMat: Material | null = null;
+let sparks: GPUParticleEmitter | null = null;
+let sparkMat: PointsMaterial | null = null;
 let pMax = 0;
 function buildParticles(): void {
   const max = particleCounts(look!).pool;
@@ -436,7 +433,7 @@ function buildParticles(): void {
   if (!max) return;
   sparkMat = new PointsMaterial({ size: 0.16, map: spriteTex, transparent: true, opacity: 0.95, depthWrite: false, sizeAttenuation: true, blending: AdditiveBlending });
   // Up at 1.2–2.8 with up to 1.3 sideways, falling, gone in 0.7–1.2 s (a cone: the old fountain's sideways speed had a floor of 0.36).
-  sparks = new ParticleEmitter({
+  sparks = new GPUParticleEmitter({
     capacity: max, material: sparkMat, seed: 0xbeef, life: [0.7, 1.2], velocity: [0, 1.6, 0], velocitySpread: [0, 0.8, 0],
     speed: [0.36, 1.32], spread: Math.PI / 2, gravity: [0, -4.5, 0],
   });

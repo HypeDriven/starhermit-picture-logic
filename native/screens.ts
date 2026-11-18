@@ -127,7 +127,7 @@ function badge(id: string, text: string, ranked = false): void {
 const plain = (s: string): string => s.replace(/<[^>]+>/g, "");
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   const f = frame();
   if (app.screen) fullScreen(L);
@@ -136,7 +136,6 @@ export function drawScreens(): void {
     if (app.paused) pauseSheet(L);
   }
   if (app.preparing) preparingSheet(L);
-  toasts(L);
   if (app.focusNext) {
     const age = f.frame - app.openedFrame;
     if (age >= 1) ui.setFocus(app.focusNext);
@@ -479,30 +478,6 @@ function boardOverlay(L: Layout, s: State): void {
   }
 }
 
-// ------------------------------------------------------------------ toasts (#toasts)
-function toasts(L: Layout): void {
-  if (!app.toasts.length) return;
-  // Drawn by role-none widgets in an unstyled column: toasts never take the pointer (#toasts { pointer-events: none }).
-  const sc = L.sc;
-  const maxW = Math.min(L.lw - 24, 520);
-  const inPlay = !app.screen && !!app.session;
-  const at = inPlay ? { anchor: "bottom" as const, x: 0, y: L.short ? 12 : 90 } : { anchor: "top" as const, x: 0, y: 12 };
-  ui.place("toast-stack", at, () => {
-    ui.column("toast-col", () => {
-      app.toasts.forEach((t) => {
-        const m = draw.measureText(t.text, __l10nDrawOptions({ size: 16 * sc, maxWidth: (maxW - 36) * sc }));
-        const w = m.width / sc + 36, h = m.height / sc + 16;
-        ui.widget("", {
-          role: "none", size: { width: w, height: h },
-          draw: (r) => {
-            draw.box(r.x, r.y, r.width, r.height, "toast");
-            draw.text(t.text, r.x + r.width / 2, r.y + 8 * sc, __l10nDrawOptions({ size: 16 * sc, color: token("ink"), align: "center", maxWidth: (maxW - 36) * sc }));
-          },
-        });
-      });
-    }, { spacing: 8, align: "center" });
-  });
-}
 
 // ------------------------------------------------------------------ the pause sheet (#overlay-pause) and the preparing sheet
 function sheetWidth(L: Layout, max = 560): number { return Math.min(max, L.lw - 32); }
@@ -1086,3 +1061,10 @@ function resultsScreen(w: number): void {
   }, { spacing: 8, padding: { top: 4 } });
 }
 
+
+export function drawScreens(): void {
+  if (app.screen !== "help") { drawScreensImmediate(); return; }
+  const actions = ["cursor_up","cursor_down","cursor_left","cursor_right","fill","mark","clear","hint","undo","pause","camera"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
+}
