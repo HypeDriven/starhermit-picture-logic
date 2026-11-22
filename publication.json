@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-08-17T16:42:04.567854+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-18T17:52:21.839347+00:00",
+    "coverArtUpdatedAt": "2026-11-22T14:25:37.560582+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-18T17:52:21.829245+00:00",
+      "deployedAt": "2026-11-22T14:25:37.546215+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.44.1",
+      "engineVersion": "1.47.0",
       "deployWarning": null
     },
     "description": "Use row and column clues to fill a grid and reveal hidden pixel pictures in nonogram puzzles.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-18T17:52:21.807Z",
-  "sourceCommit": "79a5c38e6e6ad67081b23ad5ab95bebf85ff86e4",
-  "bytesReceived": 2169775,
-  "archiveSha256": "2e95b203a1f607f3848606676c112f90aab227b88b5233985207f24a19fc826e",
+  "publishedAt": "2026-11-22T14:25:37.911Z",
+  "sourceCommit": "a8ebbc5abf5336ad110056f233612cbb37994db1",
+  "bytesReceived": 2170853,
+  "archiveSha256": "88093e2b3fbce3d8ed00aec9da32d17b3b5fbf030d98573141de043e03f6e275",
   "indexSha256": "2cd7d4abf2080a54c0a2a81e1d1c8191341d1be0c82f9afdd2f94bef67905acd",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2169775,
+    "bytesReceived": 2170853,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.44.1",
+    "engineVersion": "1.47.0",
     "deployWarning": null
   },
   "liveVerification": {
