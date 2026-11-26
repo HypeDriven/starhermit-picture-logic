@@ -24,7 +24,7 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // countdown, the hold-to-mark delay and the pause before the results run on
 // it too, so a hidden window and slow frames never move them and play
 // scripts replay exactly.
-import { clipboard, frame, levelSettings, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
+import { clipboard, frame, levelSettings, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate, setTargetFps } from "starhermit:engine";
 import { onAction, onPointerButton, onPointerMove, onTouch, primaryPointer } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn } from "starhermit:platform";
@@ -765,9 +765,20 @@ onResume(() => {
 });
 
 let frameDt = 0;
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on the title (its page covers the window and the board does not draw there)
+ * and on phone levels (levelIndex <= 3) under a finger; none otherwise. The round clock stays 60 fixed
+ * steps a second. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = app.screen === "title" || (frame().levelIndex <= 3 && primaryPointer() === "coarse") ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
 onUpdate((dt) => {
   frameDt = dt;
   applyLook();
+  capFrames();
   const o = platform.options;
   applyTokens(o.theme, o.palette, ui.preferences().highContrast);
   audio.update();

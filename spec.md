@@ -174,12 +174,16 @@ Cosmetic particle emitters use native GPU particles with automatic CPU fallback 
 
 ## Engine 1.50.0
 
-Browser play uses the WebGPU-only StarHermit 1.50.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.50.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Toasts use native engine stacking, styling, accessibility and lifetime management.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
+
+**Frame rate (host API 1.49 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its page covers the window and the board does not draw there; the light-board backdrop drifts at 30 too) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+
+**Still scenery (host API 1.49).** The ground disc, the board slab and its light rim are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms; a new board or graphics change rebuilds the slab. The cells (an InstancedMesh whose cells lift and glow), the swaying flora, the selection ring, hover ghost, sparks and motes stay movable.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.

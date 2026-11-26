@@ -148,6 +148,7 @@ const groundMat = new MeshStandardMaterial({ color: 0x232c40, roughness: 0.95, m
 const ground = new Mesh(new CircleGeometry(40, 48), groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.55;
+ground.movable = false;
 scene.add(ground);
 const floraGroup = new Group();
 scene.add(floraGroup);
@@ -220,6 +221,7 @@ function rebuildSlab(): void {
   const geo = detailed ? new RoundedBoxGeometry(w, 0.5, h, 3, 0.16) : new BoxGeometry(w, 0.5, h);
   slab = new Mesh(geo, slabMat);
   slab.position.y = -0.26;
+  slab.movable = false;
   scene.add(slab);
   if (detailed) {
     rimMat = new MeshStandardMaterial({ color: 0x000000, emissive: own(theme.accent), emissiveIntensity: 0.6, roughness: 0.5 });
@@ -232,6 +234,7 @@ function rebuildSlab(): void {
     };
     strip(gx * 2 + t, t, 0, -gz); strip(gx * 2 + t, t, 0, gz);
     strip(t, gz * 2 + t, -gx, 0); strip(t, gz * 2 + t, gx, 0);
+    rimStrips.movable = false;
     scene.add(rimStrips);
   }
   applyShadowFlags();
