@@ -4,7 +4,7 @@
 **Game index:** 35
 **Genre:** Constraint picture puzzle (nonogram)
 **Players:** 1 player; asynchronous score comparison
-**Runtime:** a StarHermit engine script game (engine 1.50.0, host API 1.50, `engine.minor=50`), played natively by the StarHermit client and in browsers by the engine's web runtime
+**Runtime:** a StarHermit engine script game (engine 1.53.0, host API 1.53, `engine.minor=53`), played natively by the StarHermit client and in browsers by the engine's web runtime
 **Targets:** desktop, phones and tablets, portrait and landscape
 
 ## 1. Product vision
@@ -135,7 +135,7 @@ The round's authoritative clock is the runtime's fixed steps (60 Hz): 500 ms tic
 
 ## 6. StarHermit integration
 
-- **Manifest** (`starhermit.txt`): `launch=index.html` (the engine's web loader from `npm run package`), `engine.entry=native/main.ts`, `engine.version=1.50.0`, `engine.minor=50`, capabilities platform, storage, clipboard, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action.
+- **Manifest** (`starhermit.txt`): `launch=index.html` (the engine's web loader from `npm run package`), `engine.entry=native/main.ts`, `engine.version=1.53.0`, `engine.minor=53`, capabilities platform, storage, clipboard, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action.
 - **Save** (`starhermit:storage` saves, schema 1, device and cloud): `{ v, progress, name }`; another device's save merges on a conflict (`mergeSave`: journey records keep the most stars, best score and fastest time; dailies and challenges the better score; lessons, achievements (earliest date), daily dates and excluded dailies unioned; the local board merged to its top 50; completions, practice plays and best clean streak the larger; this device's clean streak, in-progress snapshot and name). The browser build's cloud slot (`game:<slug>`, `{ savedAt, settings, progress }`) shows as foreign: its progress, display name and game options are merged in and the slot is replaced once.
 - **Options** (engine settings, synced): theme, palette, leftHanded, holdToMark, captions, inputMode. The browser build's settings KV keys are adopted where they are game options (unless set here since), then all of them (and `ui.*`) are removed; volumes, mute, graphics, reduced motion, contrast, larger text, gamepad map and language are the runtime's Options.
 - **Clock:** the Daily date and the Challenge week come from the platform's clock (`serverNow`), else the device's UTC date.
@@ -172,9 +172,9 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 Cosmetic particle emitters use native GPU particles with automatic CPU fallback on devices or graphics tiers without GPU particle support.
 
-## Engine 1.50.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.50.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
@@ -182,8 +182,10 @@ Toasts use native engine stacking, styling, accessibility and lifetime managemen
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.49 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its page covers the window and the board does not draw there; the light-board backdrop drifts at 30 too) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.53 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its page covers the window and the board does not draw there; the light-board backdrop drifts at 30 too) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery (host API 1.49).** The ground disc, the board slab and its light rim are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms; a new board or graphics change rebuilds the slab. The cells (an InstancedMesh whose cells lift and glow), the swaying flora, the selection ring, hover ghost, sparks and motes stay movable.
+**Still scenery (host API 1.53).** The ground disc, the board slab and its light rim are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms; a new board or graphics change rebuilds the slab. The cells (an InstancedMesh whose cells lift and glow), the swaying flora, the selection ring, hover ghost, sparks and motes stay movable.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
