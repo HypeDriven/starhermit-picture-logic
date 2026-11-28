@@ -46,9 +46,6 @@ export function loadSfx(): void {
       if (list.length) banks.set(event, new SoundBank({ clips: list, bus: "effects", minGap: 0.04 }));
     });
   }
-  renderStem(renderAmbience, (c) => { ambClip = c; });
-  renderStem(() => renderNotes(MEL_S, calm), (c) => { aClip = c; });
-  renderStem(() => renderNotes(MEL_S, dense), (c) => { bClip = c; });
 }
 
 /** audio.js event(): one clip of the event's group (none within 40 ms of the last). */
@@ -145,7 +142,19 @@ export function setSuspended(on: boolean): void {
 
 let lastIntensity = -1;
 /** Each frame: once the mixer runs, the room tone, the melody and the theme's pad as their stems are ready. */
+let __bedsStarted = false;
+function startBeds(): void {
+  if (__bedsStarted) return;
+  __bedsStarted = true;
+  void (async () => {
+    renderStem(renderAmbience, (c) => { ambClip = c; });
+    renderStem(() => renderNotes(MEL_S, calm), (c) => { aClip = c; });
+    renderStem(() => renderNotes(MEL_S, dense), (c) => { bClip = c; });
+  })();
+}
+
 export function update(): void {
+  startBeds();
   if (bVoice && !suspended && Math.abs(intensity - lastIntensity) > 0.02) {
     lastIntensity = intensity;
     try { bVoice.fade(MUSIC_GAIN * intensity, 0.6); } catch { /* gone */ }
